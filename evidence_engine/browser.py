@@ -49,21 +49,20 @@ def capture_page(url: str, save_dir: str = "data/evidence") -> dict:
         def block_internal(route):
             request = route.request
             req_url = request.url
-            if request.resource_type in ["document", "fetch", "xhr"]:
-                import urllib.parse
-                hostname = urllib.parse.urlparse(req_url).hostname
-                if hostname and hostname not in resolved_cache:
-                    try:
-                        from security.ssrf_guard import resolve_host, is_private_ip, SSRFError
-                        ips = resolve_host(req_url)
-                        for ip in ips:
-                            if is_private_ip(ip):
-                                raise SSRFError(f"Blocked IP: {ip}")
-                        resolved_cache[hostname] = True
-                    except Exception as e:
-                        print(f"Playwright SSRF Blocked: {req_url} ({e})")
-                        route.abort("accessdenied")
-                        return
+            import urllib.parse
+            hostname = urllib.parse.urlparse(req_url).hostname
+            if hostname and hostname not in resolved_cache:
+                try:
+                    from security.ssrf_guard import resolve_host, is_private_ip, SSRFError
+                    ips = resolve_host(req_url)
+                    for ip in ips:
+                        if is_private_ip(ip):
+                            raise SSRFError(f"Blocked IP: {ip}")
+                    resolved_cache[hostname] = True
+                except Exception as e:
+                    print(f"Playwright SSRF Blocked: {req_url} ({e})")
+                    route.abort("accessdenied")
+                    return
             route.continue_()
             
         page.route("**/*", block_internal)
