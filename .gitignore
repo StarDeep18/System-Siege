@@ -1,0 +1,52 @@
+# ── Secrets & API Keys ───────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+secrets.toml
+secrets.json
+firebase_credentials.json
+firebase_service_account.json
+service_account.json
+serviceAccountKey.json
+google-services.json
+*_key.json
+*_secret.json
+api_keys.py
+config_secrets.py
+
+# ── Streamlit ─────────────────────────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual Environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ── OS & Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Logs & Temp ───────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.cache
+snapshots/
+.serviceAccountKey.json

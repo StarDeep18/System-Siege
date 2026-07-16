@@ -1,0 +1,111 @@
+/* 
+styles/theme.css — Sentinel Glass Theme (Enterprise UI/UX)
+
+A premium commercial design system inspired by Linear, Stripe, and Cloudflare.
+Emphasizes whitespace, soft rounded corners, thin borders, and subtle shadows.
+Absolutely no glowing "hacker" elements.
+*/
+
+/* ── Typography & Global Reset ────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif !important;
+    background-color: #0f172a !important; /* Deep Slate Background */
+    color: #f8fafc !important;
+}
+
+/* Hide default Streamlit clutter */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Increase global whitespace in the main block */
+.block-container {
+    padding-top: 3rem !important;
+    padding-bottom: 3rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    max-width: 1400px !important;
+}
+
+/* ── Sentinel Glass Components ────────────────────────────────────────────── */
+
+/* Premium Card (Replaces glass-panel) */
+.sentinel-card {
+    background-color: #1e293b; /* Slightly lighter slate */
+    border: 1px solid #334155; /* Thin dark border */
+    border-radius: 12px; /* Soft rounded corners */
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* Subtle shadow, no glow */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sentinel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Section Headers */
+.sentinel-section-header {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 1.25rem;
+    letter-spacing: -0.01em;
+}
+
+/* Status Chips */
+.sentinel-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px; /* Pill shape */
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.sentinel-chip.healthy {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.sentinel-chip.warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.sentinel-chip.critical {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ── Streamlit Element Overrides ──────────────────────────────────────────── */
+
+/* Buttons */
+.stButton > button {
+    background-color: #334155 !important;
+    color: #f8fafc !important;
+    border: 1px solid #475569 !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+}
+
+.stButton > button:hover {
+    background-color: #475569 !important;
+    border-color: #94a3b8 !important;
+}
+
+/* Dataframes / Tables */
+.stDataFrame {
+    border: 1px solid #334155 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}

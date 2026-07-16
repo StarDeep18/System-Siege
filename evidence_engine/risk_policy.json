@@ -1,0 +1,63 @@
+{
+  "policy_version": "1.0",
+  "engine_version": "1.0",
+  "rules": {
+    "missing_csp": {
+      "score_penalty": 20,
+      "severity": "High",
+      "owasp": [
+        "Security Misconfiguration"
+      ]
+    },
+    "missing_hsts": {
+      "score_penalty": 15,
+      "severity": "Medium",
+      "owasp": [
+        "Security Misconfiguration"
+      ]
+    },
+    "missing_x_frame_options": {
+      "score_penalty": 10,
+      "severity": "Low",
+      "owasp": [
+        "Security Misconfiguration"
+      ]
+    },
+    "missing_x_content_type_options": {
+      "score_penalty": 5,
+      "severity": "Low",
+      "owasp": [
+        "Security Misconfiguration"
+      ]
+    },
+    "server_header_exposure": {
+      "score_penalty": 10,
+      "severity": "Low",
+      "owasp": [
+        "Security Misconfiguration"
+      ]
+    },
+    "invalid_ssl": {
+      "score_penalty": 30,
+      "severity": "High",
+      "owasp": [
+        "Cryptographic Failures"
+      ]
+    },
+    "expired_ssl": {
+      "score_penalty": 30,
+      "severity": "High",
+      "owasp": [
+        "Cryptographic Failures"
+      ]
+    },
+    "defacement": {
+      "score_penalty": 100,
+      "severity": "Critical",
+      "owasp": [
+        "Security Misconfiguration",
+        "Broken Access Control"
+      ]
+    }
+  }
+}

@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return getRole() == 'admin' || getRole() == 'lead_analyst';
+    }
+
+
+    // ── Collection: users ─────────────────────────────────────────────
+    match /users/{userId} {
+      // Users can only read their own document.
+      // They can update it, but strictly CANNOT modify their 'role' field.
+      allow read: if isOwner(userId);
+      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      // Only the backend Admin SDK or the user themselves (during initial signup) can create.
+      allow create: if isOwner(userId);
+      allow delete: if false; // Users cannot delete their accounts directly via client
+    }
+
+
+    // ── Collection: assets ────────────────────────────────────────────
+    match /assets/{assetId} {
+      // Users can only manage assets they own (enforced by the 'uid' field)
+      allow read, update, delete: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+    }
+
+
+    // ── Collection: scans ─────────────────────────────────────────────
+    match /scans/{scanId} {
+      // Users can only read their own scan history. 
+      // The backend evidence engine writes to this, but if clients write, they must own it.
+      allow read, update, delete: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+    }
+
+
+    // ── Collection: reports ───────────────────────────────────────────
+    match /reports/{reportId} {
+      // Incident reports are tied to a specific user
+      allow read, update, delete: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+    }
+
+
+    // ── Collection: audit_logs ────────────────────────────────────────
+    match /audit_logs/{logId} {
+      // Audit logs are readable only by Admins/Lead Analysts. 
+      allow read: if isAuthenticated() && isAdmin();
+      // Only the backend (Admin SDK) should write here, but if client writes, it must include their uid.
+      allow create: if isOwner(request.resource.data.uid);
+      allow update, delete: if false; // Logs are immutable
+    }
+
+
+    // ── Collection: settings ──────────────────────────────────────────
+    match /settings/{settingId} {
+      // Users manage their own preferences
+      allow read, update, delete: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+    }
+
+  }
+}
