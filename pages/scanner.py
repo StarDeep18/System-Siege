@@ -36,12 +36,14 @@ from security.ssrf_guard import SSRFError
 from evidence_engine.fetcher import fetch, FetchResult
 from evidence_engine.models import (
     EvidenceError, ScanEvidence, RequestMetadata, HeaderEvidence, SSLEvidence,
-    SnapshotEvidence, SnapshotMetadata, DiffEvidence, ScanMetrics, VulnerabilityFinding
+    SnapshotEvidence, SnapshotMetadata, DiffEvidence, ScanMetrics, VulnerabilityFinding,
+    ActiveScanEvidence
 )
 from evidence_engine.headers import analyse as analyse_headers, SecurityHeaderFinding
 from evidence_engine import ssl_checker
 from evidence_engine import snapshot
 from evidence_engine import diff
+from evidence_engine import active_scanner
 from risk_engine import engine as risk_engine
 from ai import explainability
 from ai import attack_story
@@ -180,6 +182,12 @@ def _run_scan(raw_url: str) -> None:
         # We compare the snapshot against itself for the first run (no historical baseline)
         diff_result = diff.compare(snap, snap)
         st.write(f"✅ Diff computed.")
+        
+    # ── Step 6.5: Active Scanning ─────────────────────────────────────────────
+    with st.status("Step 6.5 — Active Penetration Testing…", expanded=False):
+        st.write("Executing DDoS, SQLi, and XSS payloads. This may take a few moments...")
+        active_result = active_scanner.run_active_scan(validated_url)
+        st.write("✅ Active scanning complete.")
 
     # ── Assemble Evidence ─────────────────────────────────────────────────────
     with st.status("Step 7 — Assembling Scan Evidence…", expanded=False):
@@ -218,6 +226,7 @@ def _run_scan(raw_url: str) -> None:
             diff=DiffEvidence(
                 change_type="NONE",
             ),
+            active_scan=active_result,
             metrics=ScanMetrics(
                 raw_metrics={"defacement_detected": diff_result.defacement_detected, "similarity_score": diff_result.similarity_score}
             )

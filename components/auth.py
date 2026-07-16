@@ -30,13 +30,15 @@ def render() -> None:
         unsafe_allow_html=True
     )
 
-    tab1, tab2 = st.tabs(["Sign In", "Register"])
-    
-    with tab1:
-        _render_login_tab()
+    _, center_col, _ = st.columns([1, 1.5, 1])
+    with center_col:
+        tab1, tab2 = st.tabs(["Sign In", "Register"])
         
-    with tab2:
-        _render_register_tab()
+        with tab1:
+            _render_login_tab()
+            
+        with tab2:
+            _render_register_tab()
 
 
 # ── Private Helpers ───────────────────────────────────────────────────────────

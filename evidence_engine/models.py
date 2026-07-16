@@ -92,6 +92,14 @@ class ScanMetrics(BaseModel):
     raw_metrics: Dict[str, Any] = Field(default_factory=dict, description="Arbitrary raw numerical metrics collected during the scan")
 
 
+class ActiveScanEvidence(BaseModel):
+    """Results from active penetration testing payloads."""
+    sqli_detected: bool = Field(False, description="True if SQL injection vulnerability was detected")
+    xss_detected: bool = Field(False, description="True if Cross-Site Scripting vulnerability was detected")
+    sensitive_files_exposed: List[str] = Field(default_factory=list, description="List of sensitive files found (e.g. .env, .git)")
+    rate_limiting_active: bool = Field(True, description="True if server actively blocked/rate-limited burst requests")
+
+
 # ── Root Model ────────────────────────────────────────────────────────────────
 
 class ScanEvidence(BaseModel):
@@ -104,6 +112,7 @@ class ScanEvidence(BaseModel):
     ssl: SSLEvidence
     snapshot: SnapshotEvidence
     diff: DiffEvidence
+    active_scan: Optional[ActiveScanEvidence] = Field(None, description="Results from active penetration testing")
     findings: List[VulnerabilityFinding] = Field(default_factory=list)
     metrics: ScanMetrics
 

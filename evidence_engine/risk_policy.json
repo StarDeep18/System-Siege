@@ -58,6 +58,26 @@
         "Security Misconfiguration",
         "Broken Access Control"
       ]
+    },
+    "sqli_detected": {
+      "score_penalty": 40,
+      "severity": "Critical",
+      "owasp": ["Injection"]
+    },
+    "xss_detected": {
+      "score_penalty": 30,
+      "severity": "High",
+      "owasp": ["Injection"]
+    },
+    "sensitive_file_exposed": {
+      "score_penalty": 50,
+      "severity": "Critical",
+      "owasp": ["Security Misconfiguration", "Sensitive Data Exposure"]
+    },
+    "missing_rate_limit": {
+      "score_penalty": 15,
+      "severity": "Medium",
+      "owasp": ["Security Misconfiguration"]
     }
   }
 }

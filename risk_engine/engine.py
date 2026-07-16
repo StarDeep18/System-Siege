@@ -107,6 +107,9 @@ def assess(evidence: ScanEvidence) -> RiskAssessment:
 
     # 1c. Defacement / diff-derived findings
     finding_refs.extend(_assess_defacement(evidence, rules))
+    
+    # 1d. Active Scan findings
+    finding_refs.extend(_assess_active_scan(evidence, rules))
 
     # ── 2. Compute scores ─────────────────────────────────────────────────────
     tech_findings = [f for f in finding_refs if "Cryptographic" not in " ".join(f.owasp)
@@ -309,6 +312,62 @@ def _assess_defacement(evidence: ScanEvidence, rules: dict) -> list[FindingRefer
             confidence=95,
         ))
 
+    return refs
+
+
+def _assess_active_scan(evidence: ScanEvidence, rules: dict) -> list[FindingReference]:
+    """Derive FindingReferences from active penetration testing payloads."""
+    refs: list[FindingReference] = []
+    
+    if not hasattr(evidence, 'active_scan') or not evidence.active_scan:
+        return refs
+        
+    active = evidence.active_scan
+    
+    if active.sqli_detected:
+        rule = rules.get("sqli_detected", {})
+        refs.append(FindingReference(
+            title="SQL Injection Vulnerability Detected",
+            severity=rule.get("severity", "Critical"),
+            category="Active Exploitation",
+            owasp=rule.get("owasp", ["Injection"]),
+            evidence_reference="active_scan.sqli_detected = True",
+            confidence=100,
+        ))
+        
+    if active.xss_detected:
+        rule = rules.get("xss_detected", {})
+        refs.append(FindingReference(
+            title="Cross-Site Scripting (XSS) Detected",
+            severity=rule.get("severity", "High"),
+            category="Active Exploitation",
+            owasp=rule.get("owasp", ["Injection"]),
+            evidence_reference="active_scan.xss_detected = True",
+            confidence=100,
+        ))
+        
+    if active.sensitive_files_exposed:
+        rule = rules.get("sensitive_file_exposed", {})
+        refs.append(FindingReference(
+            title="Sensitive Files Exposed",
+            severity=rule.get("severity", "Critical"),
+            category="Active Exploitation",
+            owasp=rule.get("owasp", ["Security Misconfiguration", "Sensitive Data Exposure"]),
+            evidence_reference=f"active_scan.sensitive_files_exposed = {active.sensitive_files_exposed}",
+            confidence=100,
+        ))
+        
+    if not active.rate_limiting_active:
+        rule = rules.get("missing_rate_limit", {})
+        refs.append(FindingReference(
+            title="Missing Rate Limiting (DDoS Vulnerable)",
+            severity=rule.get("severity", "Medium"),
+            category="Active Exploitation",
+            owasp=rule.get("owasp", ["Security Misconfiguration"]),
+            evidence_reference="active_scan.rate_limiting_active = False",
+            confidence=95,
+        ))
+        
     return refs
 
 
