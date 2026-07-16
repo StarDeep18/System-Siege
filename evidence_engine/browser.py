@@ -3,7 +3,20 @@ import uuid
 import hashlib
 import sys
 import asyncio
+import subprocess
 from playwright.sync_api import sync_playwright
+
+_PLAYWRIGHT_INSTALLED = False
+
+def _ensure_playwright_browsers():
+    """Automatically installs Chromium binaries on Streamlit Cloud if missing."""
+    global _PLAYWRIGHT_INSTALLED
+    if not _PLAYWRIGHT_INSTALLED:
+        try:
+            subprocess.run(["playwright", "install", "chromium"], check=True, capture_output=True)
+        except Exception as e:
+            print(f"Warning: Failed to auto-install Playwright browsers: {e}")
+        _PLAYWRIGHT_INSTALLED = True
 
 def capture_page(url: str, save_dir: str = "data/evidence") -> dict:
     """
@@ -18,6 +31,9 @@ def capture_page(url: str, save_dir: str = "data/evidence") -> dict:
     
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    else:
+        # If on Linux (Streamlit Cloud), ensure browser binaries exist
+        _ensure_playwright_browsers()
     
     with sync_playwright() as p:
         # Added --no-sandbox and --disable-dev-shm-usage for Streamlit Cloud compatibility
