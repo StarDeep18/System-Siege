@@ -82,37 +82,40 @@ def render() -> None:
             
             # Use columns to position the role selector next to the user info
             col1, col2, col3 = st.columns([0.6, 0.3, 0.1])
-            with col2:
-                new_role = st.selectbox(
-                    "Assign Role",
-                    options=["analyst", "engineer", "admin"],
-                    index=["analyst", "engineer", "admin"].index(current_role) if current_role in ["analyst", "engineer", "admin"] else 0,
-                    key=f"role_{uid}",
-                    label_visibility="collapsed"
-                )
-                
-                if new_role != current_role:
-                    # Immediately update role when selected
-                    with st.spinner("Updating role..."):
-                        try:
-                            db.update_user_role(uid, new_role)
-                            # If they updated their own role, update session state too
-                            if uid == st.session_state.get("uid"):
-                                st.session_state["role"] = new_role
-                            
-                            # Log the action
-                            admin_uid = st.session_state.get("uid", "Unknown Admin")
-                            db.log_action(admin_uid, "ROLE_UPDATE", f"Assigned role '{new_role}' to {email}")
-                            
-                            st.success(f"Role updated to {new_role}!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to update role: {e}")
-            with col3:
-                if st.button("🗑️", key=f"delete_{uid}", help="Permanently delete user"):
-                    if uid == st.session_state.get("uid"):
-                        st.error("You cannot delete your own admin account.")
-                    else:
+            
+            if current_role == "admin":
+                with col2:
+                    st.markdown("<div style='padding-top:0.5rem; padding-left:0.5rem; color:#64748b; font-weight:600; font-size:0.9rem;'>Superadmin (Protected)</div>", unsafe_allow_html=True)
+                # Omit the delete button for admin
+            else:
+                with col2:
+                    new_role = st.selectbox(
+                        "Assign Role",
+                        options=["analyst", "engineer", "admin"],
+                        index=["analyst", "engineer", "admin"].index(current_role) if current_role in ["analyst", "engineer", "admin"] else 0,
+                        key=f"role_{uid}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    if new_role != current_role:
+                        # Immediately update role when selected
+                        with st.spinner("Updating role..."):
+                            try:
+                                db.update_user_role(uid, new_role)
+                                # If they updated their own role, update session state too
+                                if uid == st.session_state.get("uid"):
+                                    st.session_state["role"] = new_role
+                                
+                                # Log the action
+                                admin_uid = st.session_state.get("uid", "Unknown Admin")
+                                db.log_action(admin_uid, "ROLE_UPDATE", f"Assigned role '{new_role}' to {email}")
+                                
+                                st.success(f"Role updated to {new_role}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to update role: {e}")
+                with col3:
+                    if st.button("🗑️", key=f"delete_{uid}", help="Permanently delete user"):
                         with st.spinner("Deleting user..."):
                             try:
                                 db.delete_user_account(uid)
