@@ -394,6 +394,35 @@ def _render_results(
 
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # ── Defacement & Visual Difference Row ────────────────────────────────────
+    
+    sim_score = incident.get('metrics', {}).get('raw_metrics', {}).get('similarity_score', 0)
+    defaced = incident.get('metrics', {}).get('raw_metrics', {}).get('defacement_detected', False)
+    diff_percent = round(sim_score * 100, 2)
+    
+    defaced_color = "#ef4444" if defaced else "#10b981"
+    defaced_text = "⚠️ DEFACEMENT DETECTED" if defaced else "✅ NO DEFACEMENT"
+    
+    st.markdown(
+        f"""
+        <div style="background-color:#1e293b; padding:1.25rem; border-radius:10px; border:1px solid {defaced_color}; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size:0.78rem; color:#94a3b8; font-weight:500; text-transform: uppercase;">Visual Difference Analysis</div>
+                <div style="font-size:1.5rem; font-weight:700; color:{defaced_color}; margin-top: 0.25rem;">
+                    {defaced_text}
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size:0.78rem; color:#94a3b8; font-weight:500;">MODIFICATION RATE</div>
+                <div style="font-size:2rem; font-weight:700; color:#f8fafc;">
+                    {diff_percent}%
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
     st.info(
         "**Scan scope: Full Pipeline.**  "
         "TLS inspection, snapshot comparison, headers, risk assessment, explainable AI, and attack paths generated successfully. "
