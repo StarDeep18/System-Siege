@@ -299,7 +299,7 @@ def _render_report_detail() -> None:
     with col_pdf:
         pdf_bytes = _build_text_pdf(report)
         st.download_button(
-            label="Download PDF Report",
+            label="Download Text Report",
             data=pdf_bytes,
             file_name=f"sentinel_report_{report.get('id', 'unknown')}.txt",
             mime="text/plain",
