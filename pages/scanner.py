@@ -300,7 +300,7 @@ def _run_scan(raw_url: str) -> None:
         st.write("✅ Saved to database.")
 
     # ── Render Results ────────────────────────────────────────────────────────
-    _render_results(incident, assessment)
+    _render_results(incident, assessment, evidence)
     
     st.success("Pipeline complete! You can now view the Dashboard for the results.")
 
@@ -327,6 +327,7 @@ def _render_fetch_error(error: EvidenceError) -> None:
 def _render_results(
     incident,
     assessment,
+    evidence
 ) -> None:
     """Render the full scan result panel."""
 
@@ -396,8 +397,8 @@ def _render_results(
     
     # ── Defacement & Visual Difference Row ────────────────────────────────────
     
-    sim_score = incident.get('metrics', {}).get('raw_metrics', {}).get('similarity_score', 0)
-    defaced = incident.get('metrics', {}).get('raw_metrics', {}).get('defacement_detected', False)
+    sim_score = evidence.metrics.raw_metrics.get('similarity_score', 0)
+    defaced = evidence.metrics.raw_metrics.get('defacement_detected', False)
     diff_percent = round(sim_score * 100, 2)
     
     defaced_color = "#ef4444" if defaced else "#10b981"
