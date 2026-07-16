@@ -45,24 +45,29 @@ def capture_page(url: str, save_dir: str = "data/evidence") -> dict:
         page = context.new_page()
         
         # --- SSRF Guard Interceptor ---
-        resolved_cache = {}
         def block_internal(route):
             request = route.request
             req_url = request.url
             import urllib.parse
             hostname = urllib.parse.urlparse(req_url).hostname
-            if hostname and hostname not in resolved_cache:
-                try:
-                    from security.ssrf_guard import resolve_host, is_private_ip, SSRFError
-                    ips = resolve_host(req_url)
-                    for ip in ips:
-                        if is_private_ip(ip):
-                            raise SSRFError(f"Blocked IP: {ip}")
-                    resolved_cache[hostname] = True
-                except Exception as e:
-                    print(f"Playwright SSRF Blocked: {req_url} ({e})")
-                    route.abort("accessdenied")
-                    return
+            
+            if not hostname:
+                print(f"Playwright SSRF Blocked: {req_url} (No valid hostname)")
+                route.abort("accessdenied")
+                return
+
+            try:
+                from security.ssrf_guard import resolve_host, is_private_ip, SSRFError
+                # Resolve host on every request to prevent DNS rebinding attacks
+                ips = resolve_host(req_url)
+                for ip in ips:
+                    if is_private_ip(ip):
+                        raise SSRFError(f"Blocked IP: {ip}")
+            except Exception as e:
+                print(f"Playwright SSRF Blocked: {req_url} ({e})")
+                route.abort("accessdenied")
+                return
+                
             route.continue_()
             
         page.route("**/*", block_internal)
