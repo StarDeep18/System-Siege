@@ -49,6 +49,9 @@ _load_custom_css()
 # Initialize Firebase Admin SDK
 try:
     firebase_config.initialise()
+    # Start Continuous Monitoring Scheduler Background Daemon
+    from services import scheduler
+    scheduler.start_scheduler()
 except Exception as e:
     st.error(f"⚠️ Firebase Initialization Error: {e}")
     st.info("Make sure FIREBASE_SERVICE_ACCOUNT_JSON is set correctly in your .env file.")

@@ -37,6 +37,22 @@ def render() -> None:
     # ── System Status Bar ─────────────────────────────────────────────────────
     _render_status_bar(uid)
 
+    # ── Real-time Alert Banner ──
+    if uid:
+        try:
+            from firebase.db import get_db
+            db_client = get_db()
+            unread_ref = db_client.collection("alerts").where("owner_uid", "==", uid).where("status", "==", "UNREAD").stream()
+            unread_alerts = [{"id": a.id, **a.to_dict()} for a in unread_ref]
+            
+            for alert in unread_alerts:
+                st.error(f"🚨 **{alert.get('title', 'Security Warning')}** — {alert.get('description', '')}")
+                if st.button(f"Acknowledge Alert {alert['id'][:8]}...", key=f"ack_{alert['id']}"):
+                    db_client.collection("alerts").document(alert["id"]).update({"status": "ACKNOWLEDGED"})
+                    st.rerun()
+        except Exception:
+            pass
+
     # ── Load data from the ONLY real sources ─────────────────────────────────
     incident   = _load_latest_incident(uid)
     assets     = _load_assets(uid)
@@ -498,57 +514,72 @@ def _render_system_health(uid: str) -> None:
 
 
 def _render_incident_timeline(incident: Optional[dict]) -> None:
-    """Incident Timeline — renders real events from the Incident timeline."""
+    """Incident Timeline — renders real events from the scans and alerts collections."""
     st.markdown(
         "<div style='font-family:\"Inter\",sans-serif; font-size:1.1rem; font-weight:600;"
         " color:#f8fafc; margin-bottom:1rem;'>Incident Timeline</div>",
         unsafe_allow_html=True,
     )
 
-    if not incident:
-        _no_data_panel("No timeline data available.")
+    uid = st.session_state.get("uid", "")
+    if not uid:
+        _no_data_panel("No timeline events recorded.")
         return
 
-    # Events may be stored as a list of dicts in Firestore
-    timeline = incident.get("timeline", {})
-    events: list[dict] = []
+    # Fetch latest scans and alerts to construct a real-time timeline
+    try:
+        from firebase.db import get_scans, get_db
+        scans = get_scans(uid, limit=5)
+        
+        db_client = get_db()
+        alerts_ref = db_client.collection("alerts").where("owner_uid", "==", uid).limit(5).stream()
+        alerts = [{"type": "ALERT", **a.to_dict()} for a in alerts_ref]
+    except Exception:
+        scans = []
+        alerts = []
 
-    if isinstance(timeline, dict):
-        events = timeline.get("events", [])
-    elif isinstance(timeline, list):
-        events = timeline
+    # Merge and sort events by timestamp
+    events = []
+    for s in scans:
+        ts = s.get("timestamp")
+        events.append({
+            "title": f"Scan Complete: {s.get('url', 'Unknown')}",
+            "description": f"Score: {s.get('overall_security_score', s.get('score', 100))}/100 | Class: {s.get('change_classification', 'None')}",
+            "timestamp": ts,
+            "icon": "🛰"
+        })
+    for a in alerts:
+        ts = a.get("timestamp")
+        events.append({
+            "title": f"Alert: {a.get('title', 'Security Alert')}",
+            "description": a.get("description", ""),
+            "timestamp": ts,
+            "icon": "🚨"
+        })
+
+    # Sort in memory descending
+    events.sort(key=lambda x: x["timestamp"].timestamp() if isinstance(x["timestamp"], datetime) else 0, reverse=True)
+    events = events[:5]
 
     if not events:
         _no_data_panel("No timeline events recorded.")
         return
 
-    _EVENT_ICON = {
-        "Scan Completed":                  "🛰",
-        "Risk Assessment Completed":        "🛡",
-        "Explainable AI Report Generated":  "🧠",
-        "Attack Path Explorer Generated":   "🗺",
-        "Incident Created":                 "📋",
-        "Critical Alert Generated":         "⚠",
-}
-
     rows_html = ""
-    for event in events[-5:]:   # show last 5 events
-        event_type = event.get("event_type", "Event")
-        icon       = _EVENT_ICON.get(event_type, "●")
-        ts         = event.get("timestamp", "")
+    for event in events:
+        ts = event["timestamp"]
         if isinstance(ts, datetime):
             ts_str = ts.strftime("%H:%M")
-        elif isinstance(ts, str):
-            ts_str = ts[11:16] if len(ts) > 15 else ts
         else:
             ts_str = "—"
 
         rows_html += (
             f"<div style='display:flex; gap:1rem; align-items:flex-start; margin-bottom:1rem;'>"
-            f"<span style='font-size:1.2rem;'>{icon}</span>"
+            f"<span style='font-size:1.2rem;'>{event['icon']}</span>"
             f"<div>"
             f"<div style='color:#64748b; font-size:0.72rem;'>{ts_str}</div>"
-            f"<div style='color:#e2e8f0; font-size:0.85rem;'>{event_type}</div>"
+            f"<div style='color:#e2e8f0; font-size:0.85rem; font-weight:600;'>{event['title']}</div>"
+            f"<div style='color:#94a3b8; font-size:0.78rem;'>{event['description']}</div>"
             f"</div></div>"
         )
 
@@ -567,32 +598,44 @@ def _render_monitoring_panel(
     incident: Optional[dict],
     assets: list[dict],
 ) -> None:
-    """Monitoring Status — real asset count and last scan timestamp."""
+    """Monitoring Status — real scheduler settings, active items, and schedules."""
     st.markdown(
         "<div style='font-family:\"Inter\",sans-serif; font-size:1.1rem; font-weight:600;"
         " color:#f8fafc; margin-bottom:1rem;'>Monitoring Status</div>",
         unsafe_allow_html=True,
     )
 
-    asset_count   = len(assets)
-    monitoring_on = incident.get("monitoring_enabled", False) if incident else False
-    last_scan_ts  = None
+    asset_count = len(assets)
+    active_monitored_assets = [a for a in assets if a.get("monitoring_enabled", False)]
+    monitoring_on = len(active_monitored_assets) > 0
+    
+    last_scan_ts = None
+    next_scan_ts = None
     scan_interval = "—"
 
-    if incident:
-        monitoring_status = incident.get("monitoring_status", {})
-        if isinstance(monitoring_status, dict):
-            monitoring_on  = monitoring_status.get("monitoring_enabled", False)
-            last_scan_ts   = monitoring_status.get("last_scan_at")
-            scan_interval  = f"{monitoring_status.get('scan_interval_hours', 24)} hours"
-        last_scan_ts = last_scan_ts or incident.get("created_at") or incident.get("timestamp")
+    # Derive values from active schedules
+    if active_monitored_assets:
+        # Find latest scan and next run
+        last_scans = [a["last_scanned"] for a in active_monitored_assets if a.get("last_scanned")]
+        next_scans = [a["next_scheduled_scan_at"] for a in active_monitored_assets if a.get("next_scheduled_scan_at")]
+        intervals = [a["monitoring_interval_minutes"] for a in active_monitored_assets if a.get("monitoring_interval_minutes")]
+        
+        if last_scans:
+            last_scan_ts = max(last_scans)
+        if next_scans:
+            next_scan_ts = min(next_scans)
+        if intervals:
+            scan_interval = f"{min(intervals)} min" if min(intervals) < 60 else f"{min(intervals)//60} hours"
 
     if isinstance(last_scan_ts, datetime):
         last_scan_str = last_scan_ts.strftime("%Y-%m-%d %H:%M UTC")
-    elif isinstance(last_scan_ts, str):
-        last_scan_str = last_scan_ts[:16]
     else:
         last_scan_str = "No data available."
+
+    if isinstance(next_scan_ts, datetime):
+        next_scan_str = next_scan_ts.strftime("%Y-%m-%d %H:%M UTC")
+    else:
+        next_scan_str = "—"
 
     status_label = "ACTIVE" if monitoring_on else "INACTIVE"
     status_color = "#10B981" if monitoring_on else "#64748b"
@@ -603,24 +646,29 @@ def _render_monitoring_panel(
 <div style='background-color:#1e293b; padding:1.25rem; border-radius:12px;
                      border:1px solid #334155; font-family:"Inter",sans-serif;'>
 <div style='display:flex; justify-content:space-between; align-items:center;
-                         margin-bottom:1rem;'>
+                          margin-bottom:1rem;'>
 <span style='color:#cbd5e1; font-size:0.9rem;'>Status</span>
 <span style='color:{status_color}; font-size:0.78rem; font-weight:600;
                               background-color:{status_bg}; padding:0.2rem 0.5rem;
                               border-radius:4px;'>{status_label}</span>
 </div>
 <div style='display:flex; justify-content:space-between; align-items:center;
-                         margin-bottom:0.75rem; font-size:0.85rem;'>
+                          margin-bottom:0.75rem; font-size:0.85rem;'>
 <span style='color:#94a3b8;'>Protected Assets</span>
 <span style='color:#f8fafc; font-weight:500;'>{asset_count if asset_count else "No data available."}</span>
 </div>
 <div style='display:flex; justify-content:space-between; align-items:center;
-                         margin-bottom:0.75rem; font-size:0.85rem;'>
+                          margin-bottom:0.75rem; font-size:0.85rem;'>
 <span style='color:#94a3b8;'>Last Scan</span>
 <span style='color:#f8fafc; font-weight:500;'>{last_scan_str}</span>
 </div>
 <div style='display:flex; justify-content:space-between; align-items:center;
-                         font-size:0.85rem;'>
+                          margin-bottom:0.75rem; font-size:0.85rem;'>
+<span style='color:#94a3b8;'>Next Scan</span>
+<span style='color:#f8fafc; font-weight:500;'>{next_scan_str}</span>
+</div>
+<div style='display:flex; justify-content:space-between; align-items:center;
+                          font-size:0.85rem;'>
 <span style='color:#94a3b8;'>Scan Interval</span>
 <span style='color:#f8fafc; font-weight:500;'>{scan_interval}</span>
 </div>

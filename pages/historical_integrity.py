@@ -83,22 +83,12 @@ def render() -> None:
     }
 
     st.markdown("### Protected Assets")
-    col1, col2 = st.columns([0.7, 0.3])
-
-    with col1:
-        selected_name = st.selectbox(
-            "Select Monitored Website",
-            options=list(asset_map.keys()),
-            label_visibility="collapsed"
-        )
-
-    with col2:
-        interval = st.selectbox(
-            "Monitoring Interval",
-            options=["15 min", "30 min", "60 min", "Custom (Off)"],
-            index=3,
-            label_visibility="collapsed"
-        )
+    
+    selected_name = st.selectbox(
+        "Select Monitored Website",
+        options=list(asset_map.keys()),
+        label_visibility="collapsed"
+    )
 
     if not selected_name:
         return
@@ -106,8 +96,83 @@ def render() -> None:
     selected_asset = asset_map[selected_name]
     asset_id = selected_asset["id"]
     asset_url = selected_asset.get("url", "")
+    
+    # ── Monitoring Scheduler Controls ──
+    st.markdown("### Monitoring Scheduler Configuration")
+    
+    m_enabled = selected_asset.get("monitoring_enabled", False)
+    m_interval = selected_asset.get("monitoring_interval_minutes", 1440)
+    
+    # Map minutes back to selection labels
+    minutes_map = {
+        15: "15 minutes",
+        30: "30 minutes",
+        60: "60 minutes",
+        360: "6 hours",
+        720: "12 hours",
+        1440: "24 hours"
+    }
+    
+    default_label = minutes_map.get(m_interval, "Custom")
+    options = ["15 minutes", "30 minutes", "60 minutes", "6 hours", "12 hours", "24 hours", "Custom"]
+    
+    try:
+        default_index = options.index(default_label)
+    except ValueError:
+        default_index = 6 # Custom
+        
+    c_status, c_control = st.columns([0.4, 0.6])
+    
+    with c_status:
+        st.markdown("**Status:**")
+        if m_enabled:
+            st.markdown("<span style='color:#10b981; font-weight:600; font-size:1.1rem;'>● ACTIVE</span>", unsafe_allow_html=True)
+            last_run = selected_asset.get("last_scanned")
+            next_run = selected_asset.get("next_scheduled_scan_at")
+            if last_run:
+                st.write(f"Last Scan: {last_run.strftime('%Y-%m-%d %H:%M UTC')}")
+            if next_run:
+                st.write(f"Next Scan: {next_run.strftime('%Y-%m-%d %H:%M UTC')}")
+        else:
+            st.markdown("<span style='color:#64748b; font-weight:600; font-size:1.1rem;'>● INACTIVE</span>", unsafe_allow_html=True)
+            
+    with c_control:
+        enable_monitoring = st.checkbox("Enable Continuous Monitoring", value=m_enabled)
+        interval_choice = st.selectbox("Scan Interval", options=options, index=default_index)
+        
+        custom_mins = m_interval
+        if interval_choice == "Custom":
+            custom_mins = st.number_input("Custom Interval (minutes)", min_value=1, value=m_interval if m_interval not in minutes_map else 5)
+            
+        if st.button("Save Monitoring Configuration", type="primary", use_container_width=True):
+            # Calculate interval minutes
+            choice_to_mins = {
+                "15 minutes": 15,
+                "30 minutes": 30,
+                "60 minutes": 60,
+                "6 hours": 360,
+                "12 hours": 720,
+                "24 hours": 1440
+            }
+            chosen_mins = choice_to_mins.get(interval_choice, custom_mins)
+            
+            db_client = db.get_db()
+            asset_ref = db_client.collection(db.ASSETS).document(asset_id)
+            
+            from datetime import timedelta
+            next_scan_time = datetime.utcnow() + timedelta(minutes=chosen_mins) if enable_monitoring else None
+            
+            asset_ref.update({
+                "monitoring_enabled": enable_monitoring,
+                "monitoring_interval_minutes": chosen_mins,
+                "next_scheduled_scan_at": next_scan_time
+            })
+            
+            st.success("Monitoring schedule updated!")
+            time.sleep(0.5)
+            st.rerun()
 
-    if st.button("Trigger Scheduled Scan Now", key="trigger_schedule"):
+    if st.button("Trigger Manual Scan Now", key="trigger_schedule"):
         st.info("Triggering background scan using Playwright and Risk Engine...")
         import pages.scanner as scanner
         if asset_url:
