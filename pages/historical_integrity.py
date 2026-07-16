@@ -18,14 +18,14 @@ def render() -> None:
     st.markdown(
         """
         <div style="margin-bottom: 2rem;">
-            <div style="font-size: 0.8rem; color: #64748b; font-weight: 500;
+            <div style="font-size: 0.8rem; color: #00D4FF; font-weight: 500;
                         text-transform: uppercase; letter-spacing: 0.05em;
-                        font-family: 'Inter', sans-serif; margin-bottom: 0.25rem;">
-                Historical Analysis
+                        font-family: 'Space Grotesk', sans-serif; margin-bottom: 0.25rem;">
+                Executive Documentation
             </div>
-            <h1 style="margin: 0; font-family: 'Inter', sans-serif;
+            <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif;
                        font-weight: 600; font-size: 1.8rem; color: #f8fafc;">
-                Scan History & Visual Diff
+                Historical Integrity Analysis
             </h1>
         </div>
         """,
@@ -49,15 +49,37 @@ def render() -> None:
     # Create options mapping Name -> ID
     site_options = {data.get("name", id): id for id, data in sites.items()}
     
-    selected_site_name = st.selectbox(
-        "Select Monitored Website", 
-        options=list(site_options.keys())
-    )
+    st.markdown("### Protected Assets")
+    col1, col2 = st.columns([0.7, 0.3])
     
+    with col1:
+        selected_site_name = st.selectbox(
+            "Select Monitored Website", 
+            options=list(site_options.keys()),
+            label_visibility="collapsed"
+        )
+        
+    with col2:
+        interval = st.selectbox(
+            "Monitoring Interval",
+            options=["15 min", "30 min", "60 min", "Custom (Off)"],
+            index=3,
+            label_visibility="collapsed"
+        )
+        
     if not selected_site_name:
         return
         
     site_id = site_options[selected_site_name]
+    
+    # Check if a forced scan is requested
+    if st.button("Trigger Scheduled Scan Now", type="primary"):
+        st.info("Triggering background scan using Playwright and Risk Engine...")
+        import services.scanner as scanner
+        site_url = sites[site_id].get("url")
+        if site_url:
+            scanner._run_scan(site_url)
+            st.rerun()
 
     # 2. Fetch Snapshots
     try:
@@ -117,64 +139,68 @@ def _render_diff(base_snap: dict, curr_snap: dict) -> None:
     """Compare screenshots and HTML, then render the results."""
     st.markdown("---")
     
+    # ── Diff Statistics ──
+    st.markdown("### Diff Statistics")
+    
+    dom1 = base_snap.get("dom_fingerprint", "N/A")
+    dom2 = curr_snap.get("dom_fingerprint", "N/A")
+    dom_match = "✅ Matched" if dom1 == dom2 else "❌ Altered"
+    
+    txt1 = base_snap.get("text_fingerprint", "N/A")
+    txt2 = curr_snap.get("text_fingerprint", "N/A")
+    text_match = "✅ Matched" if txt1 == txt2 else "❌ Altered"
+    
+    st.markdown(f"**DOM Structure Hash:** {dom_match}")
+    st.markdown(f"**Text Content Hash:** {text_match}")
+    st.markdown("<br>", unsafe_allow_html=True)
+    
     # ── Pixel-by-Pixel Image Diffing ──
-    st.markdown("#### Visual Pixel Difference")
+    st.markdown("### Visual Evidence")
     
     base_img_path = base_snap.get("screenshot_path")
     curr_img_path = curr_snap.get("screenshot_path")
     
-    if base_img_path and curr_img_path:
+    if base_img_path and curr_img_path and os.path.exists(base_img_path) and os.path.exists(curr_img_path):
         try:
             with Image.open(base_img_path) as img1, Image.open(curr_img_path) as img2:
-                # Ensure same size for numpy subtraction
                 if img1.size != img2.size:
-                    # Resize img2 to match img1
                     img2 = img2.resize(img1.size)
                 
-                # Convert to numpy arrays
                 arr1 = np.array(img1.convert("RGB")).astype(np.int16)
                 arr2 = np.array(img2.convert("RGB")).astype(np.int16)
-                
-                # Absolute difference
                 diff_arr = np.abs(arr2 - arr1)
                 
-                # Calculate % pixels changed (threshold > 15 per channel)
-                # A pixel is "changed" if any of its RGB channels changed > 15
                 changed_mask = np.any(diff_arr > 15, axis=-1)
-                total_pixels = arr1.shape[0] * arr1.shape[1]
-                changed_pixels = np.sum(changed_mask)
-                diff_pct = (changed_pixels / total_pixels) * 100
+                diff_pct = (np.sum(changed_mask) / (arr1.shape[0] * arr1.shape[1])) * 100
+                sim_score = 100 - diff_pct
                 
-                # Generate brightened diff image
-                # Multiply diff by 5 and clip to 255
                 bright_diff = np.clip(diff_arr * 5, 0, 255).astype(np.uint8)
                 diff_img = Image.fromarray(bright_diff)
                 
                 # Render metrics
-                st.metric(label="Visual Modification Rate", value=f"{diff_pct:.2f}%", delta=f"{diff_pct:.2f}%", delta_color="inverse")
+                st.metric(label="Similarity Score", value=f"{sim_score:.2f}%", delta=f"{-diff_pct:.2f}% Modification", delta_color="inverse")
                 
-                # Render images side-by-side
                 c1, c2, c3 = st.columns(3)
                 with c1:
                     st.image(img1, caption="Baseline Snapshot", use_container_width=True)
                 with c2:
-                    st.image(img2, caption="Comparison Snapshot", use_container_width=True)
+                    st.image(img2, caption="Current Snapshot", use_container_width=True)
                 with c3:
-                    st.image(diff_img, caption="Highlighted Differences", use_container_width=True)
+                    st.image(diff_img, caption="Pixel Difference", use_container_width=True)
                     
         except Exception as e:
             st.error(f"Error processing image diff: {e}")
     else:
-        st.warning("Screenshot paths not found in snapshot data.")
+        st.warning("Screenshots not found. Did you run a scan after enabling the Playwright engine?")
 
 
     # ── HTML Unified Diff ──
-    st.markdown("#### Source Code Unified Diff")
+    st.markdown("### HTML Difference")
     
     base_html_path = base_snap.get("html_path")
     curr_html_path = curr_snap.get("html_path")
     
-    if base_html_path and curr_html_path:
+    if base_html_path and curr_html_path and os.path.exists(base_html_path) and os.path.exists(curr_html_path):
         try:
             with open(base_html_path, "r", encoding="utf-8") as f1, open(curr_html_path, "r", encoding="utf-8") as f2:
                 base_lines = f1.readlines()
@@ -191,17 +217,17 @@ def _render_diff(base_snap: dict, curr_snap: dict) -> None:
                 added = sum(1 for line in diff if line.startswith("+") and not line.startswith("+++"))
                 removed = sum(1 for line in diff if line.startswith("-") and not line.startswith("---"))
                 
-                st.markdown(f"**Lines Added:** `{added}` | **Lines Removed:** `{removed}`")
+                st.markdown(f"**Changed Elements:** `{added}` additions | `{removed}` removals")
                 
-                # Show diff in code block
-                st.code("".join(diff), language="diff")
+                with st.expander("View Full HTML Diff", expanded=False):
+                    st.code("".join(diff), language="diff")
             else:
                 st.success("No source code differences detected.")
                 
         except Exception as e:
             st.error(f"Error processing HTML diff: {e}")
     else:
-        st.warning("HTML file paths not found in snapshot data.")
+        st.warning("HTML files not found locally.")
 
 
 def _render_alert(alert: dict) -> None:

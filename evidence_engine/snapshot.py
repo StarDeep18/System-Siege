@@ -30,9 +30,12 @@ class Snapshot:
     url: str
     captured_at: datetime
     text_fingerprint: str          # SHA-256 hex digest of text_content
+    dom_fingerprint: str           # SHA-256 hex digest of structural DOM
     text_content: str              # visible text only — no HTML, no scripts
     word_count: int
     status_code: int
+    screenshot_path: str = ""      # Path to local PNG file
+    html_path: str = ""            # Path to local HTML file
 
 
 # ── Public Interface ──────────────────────────────────────────────────────────
@@ -40,21 +43,30 @@ class Snapshot:
 def capture(fetch_result: FetchResult) -> Snapshot:
     """
     Create a Snapshot from a FetchResult.
-
+    Calls out to Playwright to capture actual screenshots and DOM hashes.
     Strips all HTML tags, scripts, styles, and invisible markup from the
     raw HTML. Only the normalised visible text is retained and hashed.
-    This ensures the AI layer never receives raw HTML.
     """
-    text = _extract_visible_text(fetch_result.html_content)
+    from evidence_engine.browser import capture_page
+    
+    # 1. Capture actual evidence using browser
+    browser_data = capture_page(fetch_result.url)
+    
+    # 2. Extract text from the dynamic DOM (instead of static fetch_result if preferred, 
+    # but for consistency we use browser's rendered HTML)
+    text = _extract_visible_text(browser_data["raw_html"])
     fp = fingerprint(text)
 
     return Snapshot(
         url=fetch_result.url,
         captured_at=datetime.now(timezone.utc),
         text_fingerprint=fp,
+        dom_fingerprint=browser_data["dom_fingerprint"],
         text_content=text,
         word_count=len(text.split()),
         status_code=fetch_result.status_code,
+        screenshot_path=browser_data["screenshot_path"],
+        html_path=browser_data["html_path"]
     )
 
 
@@ -72,6 +84,9 @@ def to_firestore_dict(snapshot: Snapshot) -> dict:
         "url":              snapshot.url,
         "captured_at":      snapshot.captured_at,
         "text_fingerprint": snapshot.text_fingerprint,
+        "dom_fingerprint":  snapshot.dom_fingerprint,
+        "screenshot_path":  snapshot.screenshot_path,
+        "html_path":        snapshot.html_path,
         # Store a truncated version to stay within Firestore 1 MB doc limits.
         # The full text is only needed locally for diff computation.
         "text_content":     snapshot.text_content[:50_000],
@@ -91,9 +106,12 @@ def from_firestore_dict(data: dict) -> Snapshot:
         url=data.get("url", ""),
         captured_at=captured_at,
         text_fingerprint=data.get("text_fingerprint", ""),
+        dom_fingerprint=data.get("dom_fingerprint", ""),
         text_content=data.get("text_content", ""),
         word_count=data.get("word_count", 0),
         status_code=data.get("status_code", 0),
+        screenshot_path=data.get("screenshot_path", ""),
+        html_path=data.get("html_path", "")
     )
 
 

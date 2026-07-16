@@ -31,6 +31,7 @@ class DiffResult:
     baseline_fingerprint: str
     current_fingerprint: str
     fingerprints_match: bool
+    dom_fingerprints_match: bool
     similarity_score: float          # 0.0 = identical, 1.0 = completely different
     defacement_detected: bool
     word_count_delta: int            # current - baseline (negative means content removed)
@@ -49,13 +50,15 @@ def compare(baseline: Snapshot, current: Snapshot) -> DiffResult:
         1.0  = content is completely different
     """
     fingerprints_match = baseline.text_fingerprint == current.text_fingerprint
+    dom_match = getattr(baseline, "dom_fingerprint", "") == getattr(current, "dom_fingerprint", "")
 
-    if fingerprints_match:
+    if fingerprints_match and dom_match:
         # Fingerprints match — no need to do full text comparison
         return DiffResult(
             baseline_fingerprint=baseline.text_fingerprint,
             current_fingerprint=current.text_fingerprint,
             fingerprints_match=True,
+            dom_fingerprints_match=True,
             similarity_score=0.0,
             defacement_detected=False,
             word_count_delta=current.word_count - baseline.word_count,
@@ -64,13 +67,16 @@ def compare(baseline: Snapshot, current: Snapshot) -> DiffResult:
 
     # Fingerprints differ — compute full similarity distance
     score = compute_similarity(baseline.text_content, current.text_content)
-    defacement = score >= DEFACEMENT_THRESHOLD
+    # Also trigger defacement if DOM structural hash changed radically 
+    # (though typically we just rely on the text similarity for the flag, but we'll include it)
+    defacement = score >= DEFACEMENT_THRESHOLD or not dom_match
     segments = extract_changed_segments(baseline.text_content, current.text_content)
 
     return DiffResult(
         baseline_fingerprint=baseline.text_fingerprint,
         current_fingerprint=current.text_fingerprint,
-        fingerprints_match=False,
+        fingerprints_match=fingerprints_match,
+        dom_fingerprints_match=dom_match,
         similarity_score=round(score, 4),
         defacement_detected=defacement,
         word_count_delta=current.word_count - baseline.word_count,
