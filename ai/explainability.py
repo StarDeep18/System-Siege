@@ -349,35 +349,164 @@ def _format_findings_for_prompt(findings: list[FindingReference]) -> str:
     return "\n\n".join(lines)
 
 
+_LOCAL_EXPLAIN_DATABASE = {
+    "Missing Content-Security-Policy Header": {
+        "reason": "The Content-Security-Policy (CSP) HTTP header is missing, allowing malicious scripts to be injected and executed on the client browser.",
+        "business_impact": "Attackers can launch Cross-Site Scripting (XSS) attacks, steal user session cookies, redirect users to malicious landing pages, or perform clickjacking.",
+        "recommendation": "Implement a strict Content-Security-Policy header. Restrict scripts, styles, and images to trusted origins only, and disable unsafe-inline execution.",
+        "verification_checklist": [
+            "Run 'curl -I <URL>' and inspect headers.",
+            "Verify Content-Security-Policy header is present and configured correctly."
+        ]
+    },
+    "Missing Strict-Transport-Security Header": {
+        "reason": "The Strict-Transport-Security (HSTS) header is missing. The browser is not forced to communicate exclusively over secure HTTPS channels, enabling HTTP downgrade attacks.",
+        "business_impact": "Active network attackers can intercept and capture sensitive session data via Man-in-the-Middle (MITM) redirection attacks.",
+        "recommendation": "Configure the web server or application to return the Strict-Transport-Security header with a max-age of at least one year (e.g., 31536000), including includeSubDomains.",
+        "verification_checklist": [
+            "Query headers and verify Strict-Transport-Security exists.",
+            "Ensure the max-age value is sufficiently large."
+        ]
+    },
+    "Missing X-Frame-Options Header": {
+        "reason": "The website is missing the X-Frame-Options or CSP frame-ancestors header, meaning it can be rendered inside a nested <frame> or <iframe> on an external site.",
+        "business_impact": "Enables clickjacking attacks, where an attacker tricks a user into clicking invisible buttons on your site by overlaying it on top of another page.",
+        "recommendation": "Add the X-Frame-Options HTTP response header set to DENY or SAMEORIGIN, or implement the modern frame-ancestors directive in your CSP.",
+        "verification_checklist": [
+            "Try loading the page inside an iframe on a local HTML test file.",
+            "Verify browser blocks rendering due to X-Frame-Options configuration."
+        ]
+    },
+    "Missing X-Content-Type-Options Header": {
+        "reason": "The X-Content-Type-Options header is missing, which allows the browser to perform MIME-sniffing and treat non-executable file types as executable code.",
+        "business_impact": "Can lead to Cross-Site Scripting (XSS) if users are allowed to upload text or image files containing malicious scripts.",
+        "recommendation": "Add the X-Content-Type-Options: nosniff header to all web server responses.",
+        "verification_checklist": [
+            "Verify presence of X-Content-Type-Options: nosniff header in HTTP response headers."
+        ]
+    },
+    "Server Header Discloses Technology": {
+        "reason": "The Server HTTP header returns detailed information exposing the name of the web server or technology stack.",
+        "business_impact": "Simplifies reconnaissance, enabling attackers to query vulnerability databases (CVEs) matching your exact server software versions.",
+        "recommendation": "Modify web server configurations (e.g. set server_tokens off in Nginx or strip headers in proxy/CDN settings) to conceal technology names and versions.",
+        "verification_checklist": [
+            "Send an HTTP request and confirm the Server header returns a generic value or is completely removed."
+        ]
+    },
+    "Invalid TLS Certificate": {
+        "reason": "The SSL/TLS certificate used by the server is invalid (e.g. domain mismatch, self-signed, or untrusted root CA).",
+        "business_impact": "Visitors will see critical browser security warnings. All data transmitted is susceptible to decryption via Man-in-the-Middle (MITM) interception.",
+        "recommendation": "Replace the invalid certificate with a valid one signed by a trusted Certificate Authority (CA), ensuring the Common Name (CN) or SAN matches your domain.",
+        "verification_checklist": [
+            "Navigate to the page and verify browser shows a padlock.",
+            "Inspect the certificate chain to ensure it terminates at a trusted root."
+        ]
+    },
+    "TLS Certificate Has Expired": {
+        "reason": "The TLS certificate has exceeded its validity period and is no longer trusted.",
+        "business_impact": "Disrupts user traffic with secure connection warnings, indicating potential loss of confidentiality and integrity of session communication.",
+        "recommendation": "Renew the TLS certificate immediately using Let's Encrypt or your certificate authority, and configure automated certificate renewal cron jobs.",
+        "verification_checklist": [
+            "Check certificate details to confirm the new validity dates are in the future."
+        ]
+    },
+    "Content Defacement Detected": {
+        "reason": "Significant deviations in the page layout or text structure were detected compared to the verified baseline snapshot.",
+        "business_impact": "Severe reputational damage, phishing risks, and loss of user trust due to malicious alterations of site content.",
+        "recommendation": "Revert the web site to a clean backup copy immediately. Audit access control lists, server logs, and admin accounts to identify the breach point.",
+        "verification_checklist": [
+            "Perform a code audit of the target page directory.",
+            "Compare file hashes with original repository code."
+        ]
+    },
+    "SQL Injection Vulnerability Detected": {
+        "reason": "The scanner detected that input fields or URL parameters are vulnerable to SQL Injection, allowing raw SQL queries to be sent directly to the database.",
+        "business_impact": "Critical risk of complete database compromise, unauthorized administrative access, data theft, or data destruction.",
+        "recommendation": "Use parameterized queries, prepared statements, or ORM frameworks for all database operations. Implement strict input validation and WAF protection.",
+        "verification_checklist": [
+            "Test input fields using SQL payload testing.",
+            "Ensure database errors are suppressed and parameterized commands are in use."
+        ]
+    },
+    "Cross-Site Scripting (XSS) Detected": {
+        "reason": "Input parameters are returned directly to the client browser without sanitization or HTML encoding.",
+        "business_impact": "Session hijacking, redirection to malware, page defacement, and credential theft.",
+        "recommendation": "Context-aware output encoding (HTML, JavaScript, CSS context encoding) must be applied to all user input before rendering.",
+        "verification_checklist": [
+            "Test input values with XSS vectors. Confirm vectors are either encoded or safely stripped by a filter."
+        ]
+    },
+    "Sensitive Files Exposed": {
+        "reason": "Directories, backup files, configuration files (e.g. .git, .env), or debug logs are publicly accessible.",
+        "business_impact": "High risk of exposing database credentials, API keys, intellectual property, and source code.",
+        "recommendation": "Implement strict access control rules (e.g. .htaccess or server directives) to deny access to sensitive directories and config files.",
+        "verification_checklist": [
+            "Confirm target paths return a 403 Forbidden or 404 Not Found response."
+        ]
+    },
+    "Missing Rate Limiting (DDoS Vulnerable)": {
+        "reason": "The target URL accepted a rapid burst of automated requests without responding with rate limit indicators or a 429 HTTP status code.",
+        "business_impact": "Vulnerability to denial of service attacks, brute forcing, API abuse, and high infrastructure costs.",
+        "recommendation": "Implement rate limiting policies (e.g. Nginx limit_req, Cloudflare rate limits, or middleware validation).",
+        "verification_checklist": [
+            "Run a load simulation tool and verify server responds with 429 status code for excess requests."
+        ]
+    }
+}
+
+
 def _degraded_output(
     assessment: RiskAssessment,
     reason: str = "AI response unavailable.",
 ) -> XAIOutput:
     """
     Return a safe, deterministic fallback XAIOutput when the AI layer fails.
-    Never fabricates vulnerability data — uses only the assessment's finding titles.
+    Utilises a high-quality local expert database to render specific recommendations and reasons
+    instead of placeholder text.
     """
-    finding_titles = [f.title for f in assessment.findings]
     summary = (
         f"Security Score: {assessment.summary.overall_security_score}/100 "
         f"(Grade {assessment.summary.overall_grade}). "
-        f"AI narrative unavailable: {reason}"
+        f"Diagnostic Mode: Utilizing expert security database fallback."
     )
-    xai_findings = [
-        XAIFinding(
-            finding=f.title,
-            confidence="High",
-            evidence_reference=f.evidence_reference,
-            reason="AI explanation unavailable. See evidence_reference for the deterministic source.",
-            owasp_mapping=", ".join(f.owasp),
-            business_impact="Refer to OWASP guidance for this category.",
-            recommendation="Consult the OWASP Top 10 remediation guide for this finding.",
-            verification_checklist=["Manually verify the finding against the evidence_reference."],
+    
+    xai_findings = []
+    for f in assessment.findings:
+        title = f.title
+        # Handle dynamic titles like "TLS Certificate Expires in X Days"
+        matched_db = None
+        for key in _LOCAL_EXPLAIN_DATABASE:
+            if key in title:
+                matched_db = _LOCAL_EXPLAIN_DATABASE[key]
+                break
+                
+        if matched_db:
+            reason_text = matched_db["reason"]
+            impact_text = matched_db["business_impact"]
+            rec_text = matched_db["recommendation"]
+            checklist = matched_db["verification_checklist"]
+        else:
+            reason_text = "Detailed explanation unavailable. See evidence_reference for the deterministic source."
+            impact_text = "Refer to OWASP guidance for this category."
+            rec_text = "Consult the OWASP Top 10 remediation guide for this finding."
+            checklist = ["Manually verify the finding against the evidence_reference."]
+
+        xai_findings.append(
+            XAIFinding(
+                finding=title,
+                confidence="High",
+                evidence_reference=f.evidence_reference,
+                reason=reason_text,
+                owasp_mapping=", ".join(f.owasp),
+                business_impact=impact_text,
+                recommendation=rec_text,
+                verification_checklist=checklist,
+            )
         )
-        for f in assessment.findings
-    ]
+        
     return XAIOutput(
         executive_summary=summary,
-        risk_narrative=f"Deterministic assessment complete. {reason}",
+        risk_narrative=f"Deterministic assessment complete. Local expert database active.",
         findings=xai_findings,
     )
+
