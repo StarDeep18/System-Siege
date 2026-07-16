@@ -109,6 +109,14 @@ The SentinelAI SOC will automatically open in your default web browser at `http:
 
 To get the full experience of the platform, we recommend testing the following flows:
 
+### 0. Register & Sign In as a New User
+- Open the live app and click **Register**.
+- Use any valid email address (e.g., `yourname@gmail.com`) and a password of your choice.
+- You will be automatically signed in and assigned the **Analyst** role.
+- All scans, reports, snapshots, and assets you create are **isolated to your account only** — no other user can see your data.
+
+> **Tip:** To test the admin experience, ask the deployment administrator to elevate your account role to `admin` from the Admin Panel.
+
 ### 1. Test Role-Based Access Control (Admin vs User)
 - **Log in as an Admin:** Use the admin credentials provided by your deployment administrator.
 - Navigate to the **Admin Panel** in the sidebar.
