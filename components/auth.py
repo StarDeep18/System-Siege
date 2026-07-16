@@ -71,7 +71,7 @@ def _render_login_tab() -> None:
                 st.session_state.pop("show_resend_verification", None)
                 st.session_state.pop("unverified_email", None)
             except Exception as e:
-                st.error("Failed to send verification email. Please try again.")
+                st.error(f"Failed to send verification email: {str(e)}")
 
     # Security Notice
     st.markdown(
@@ -227,4 +227,4 @@ def _handle_register(email: str, password: str) -> None:
         st.error(str(e))
     except Exception as e:
         firebase_db.log_auth_event("unknown", email, "127.0.0.1", "REGISTER", "FAILED")
-        st.error("An unexpected error occurred. Please try again.")
+        st.error(f"An unexpected error occurred: {str(e)}")

@@ -82,13 +82,16 @@ def send_verification_email(id_token: str) -> None:
     config = get_web_config()
     api_key = config.get("apiKey")
     if not api_key:
-        return
+        raise ValueError("Firebase API Key is missing.")
 
     payload = {
         "requestType": "VERIFY_EMAIL",
         "idToken": id_token
     }
-    requests.post(f"{_VERIFY_EMAIL_URL}?key={api_key}", json=payload)
+    resp = requests.post(f"{_VERIFY_EMAIL_URL}?key={api_key}", json=payload)
+    if resp.status_code != 200:
+        error_msg = resp.json().get("error", {}).get("message", "Unknown error sending verification email.")
+        raise ValueError(f"Failed to send verification email: {error_msg}")
 
 
 def get_user_info(uid: str):
