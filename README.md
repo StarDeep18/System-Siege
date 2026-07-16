@@ -110,7 +110,7 @@ The SentinelAI SOC will automatically open in your default web browser at `http:
 To get the full experience of the platform, we recommend testing the following flows:
 
 ### 1. Test Role-Based Access Control (Admin vs User)
-- **Log in as an Admin:** Use the admin email (`admin@sentinel.ai`) and the securely generated password provided by your setup script.
+- **Log in as an Admin:** Use the admin credentials provided by your deployment administrator.
 - Navigate to the **Admin Panel** in the sidebar.
 - Notice how you can assign roles (`user`, `analyst`, `admin`) to other registered users, or completely delete accounts using the 🗑️ button.
 - Notice the global **Audit Logs** at the bottom of the Admin Panel tracking all system activity.
