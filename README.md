@@ -1,159 +1,147 @@
-# SentinelAI SOC
+# 🛡️ SentinelAI SOC
 
-> AI-powered Website Defacement Detection & Vulnerability Assessment Platform  
+> **AI-Powered Website Defacement Detection & Vulnerability Assessment Platform**  
 > Built for the **System Siege Hackathon**
 
 ---
 
-## What It Does
+## 🌟 Executive Summary
 
-SentinelAI SOC monitors websites for defacement and security vulnerabilities. Every finding is explained by AI — no black-box outputs. A hypothetical attack story is generated from each scan to help stakeholders understand real-world risk.
+**SentinelAI SOC** is a next-generation Security Operations Center platform designed to automate the discovery, assessment, and explanation of web vulnerabilities. 
+
+Unlike traditional vulnerability scanners that dump raw technical jargon, SentinelAI utilizes a multi-stage pipeline—culminating in **Google Gemini AI**—to translate complex technical findings into readable Explanations, clear Risk Scores, and hypothetical Attack Stories. This empowers both technical engineers and business stakeholders to understand their actual risk posture.
+
+---
+
+## 🚀 Core Capabilities
 
 | Capability | Description |
 |---|---|
-| **Defacement Detection** | Snapshots a target URL and compares it against a saved baseline to detect visual or structural changes |
-| **Vulnerability Assessment** | Checks HTTP headers, TLS config, and common misconfigurations with OWASP mapping |
-| **Risk Scoring** | Aggregates findings into a 0–100 risk score |
-| **Explainable AI** | Every AI output includes Finding, Confidence, Evidence, Reason, OWASP mapping, Business Impact, and Recommendation |
-| **Attack Story** | Generates a hypothetical attack path from findings — clearly labelled as hypothetical |
-| **Asset Management** | Add and track monitored URLs per user |
-| **Reports** | Generate and export scan reports |
-| **Audit Logs** | Full action log for compliance and accountability |
-| **Role-Based Access** | Admin and Analyst roles enforced via Firebase |
+| **Active Penetration Testing** | Safely executes targeted payloads (SQLi, XSS, Fuzzing, Rate Limiting) against assets to detect exploitable endpoints. |
+| **Defacement Detection** | Captures cryptographic snapshots of a target URL and compares them against baselines to detect visual or structural tampering. |
+| **Passive Reconnaissance** | Analyses HTTP security headers, TLS/SSL configuration, and common misconfigurations (mapped to OWASP Top 10). |
+| **Mathematical Risk Engine** | Aggregates all deterministic findings into a rigid 0–100 security score using a strict, policy-driven penalty matrix. |
+| **Explainable AI (XAI)** | Gemini AI explains exactly *why* a vulnerability matters, providing Business Impact and Remediation steps without hallucinating scores. |
+| **Hypothetical Attack Paths** | Gemini generates a realistic narrative of how an attacker could chain the discovered vulnerabilities to breach the system. |
+| **Role-Based Access Control** | Secure Firebase-backed authentication with strict separation between `user` and `admin` roles. |
+| **Audit & Compliance** | A tamper-proof timeline logging every scan, login, and administrative action. |
 
 ---
 
-## Tech Stack
+## 🏗️ System Architecture
 
-| Layer | Technology |
-|---|---|
-| Frontend | Streamlit |
-| Backend | Python |
-| Auth | Firebase Authentication |
-| Database | Firebase Firestore |
-| AI | Google Gemini (via `google-generativeai`) |
-| Charts | Plotly |
-| Deployment | Streamlit Community Cloud |
+Our platform follows a strict deterministic-to-probabilistic pipeline to prevent AI hallucinations:
+
+1. **Evidence Engine (Deterministic):** Connects to the target website, captures HTTP headers, SSL certificates, HTML snapshots, and runs active payloads (SQLi, XSS). Outputs a strictly typed `ScanEvidence` object.
+2. **Risk Engine (Deterministic):** Compares the `ScanEvidence` against our `risk_policy.json` to calculate the mathematical 0-100 Risk Score. Outputs `FindingReferences`.
+3. **AI Engine (Probabilistic):** Sends the deterministic findings to **Gemini 2.0 Flash** via strict JSON schemas to generate human-readable explanations and hypothetical attack paths.
+4. **Incident Builder:** Compiles all data into a final Executive Incident Report stored in Firestore.
 
 ---
 
-## Project Structure
+## 💻 Tech Stack
 
-```
-sentinelai-soc/
-├── app.py                  # Entry point, auth gate, routing
-├── pages/
-│   ├── dashboard.py        # SOC overview, KPIs, charts
-│   ├── scanner.py          # Run scans, view AI results
-│   ├── assets.py           # Add / manage monitored URLs
-│   ├── reports.py          # Report viewer and export
-│   └── audit.py            # Audit log (admin only)
-├── components/
-│   ├── auth.py             # Login / register UI
-│   ├── navbar.py           # Sidebar navigation
-│   ├── cards.py            # Metric and glassmorphism cards
-│   ├── charts.py           # Plotly chart wrappers
-│   └── ai_panel.py         # Explainable AI + Attack Story display
-├── services/
-│   ├── scanner.py          # Defacement detection, snapshot comparison
-│   ├── vuln.py             # Vulnerability checks, risk scoring
-│   └── ai.py              # Gemini calls → XAI output + Attack Story
-├── firebase/
-│   ├── config.py           # Firebase SDK init
-│   ├── auth.py             # Auth helpers
-│   └── db.py               # Firestore CRUD
-├── utils/
-│   ├── security.py         # Input validation, HTML escape, ownership
-│   └── helpers.py          # Formatting, constants
-└── styles/
-    └── theme.css           # Dark theme, neon cyan, glassmorphism
-```
+- **Frontend:** Streamlit (Python) with custom CSS/Glassmorphism for a premium SOC feel.
+- **Backend Core:** Python 3.10+
+- **Database & Auth:** Firebase Firestore (NoSQL) & Firebase Authentication
+- **Artificial Intelligence:** Google Gemini API (`gemini-2.0-flash`)
+- **Visualizations:** Plotly Express
 
 ---
 
-## Quickstart
+## 🏁 Step-by-Step Guide for Judges (How to Run)
 
-### 1. Clone the repo
+Follow these steps exactly to run the platform locally on your machine for evaluation.
 
+### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/your-org/sentinelai-soc.git
-cd sentinelai-soc
+git clone https://github.com/StarDeep18/System-Siege.git
+cd System-Siege
 ```
 
-### 2. Create a virtual environment
-
+### Step 2: Set Up Python Environment
+Ensure you have Python 3.9+ installed. It is highly recommended to use a virtual environment.
 ```bash
+# Create a virtual environment
 python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+
+# Activate the virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
 ```
 
-### 3. Install dependencies
-
+### Step 3: Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+### Step 4: Configure Environment Variables
+You must set up your `.env` file to connect to Firebase and the Gemini API.
 
-```bash
-cp .env.example .env
+1. Locate the file named `.env` in the root folder (or rename `.env.example` to `.env`).
+2. Ensure it contains the following structure:
+
+```ini
+# Google Gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Firebase Configuration
+FIREBASE_API_KEY=your_firebase_web_api_key
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_SERVICE_ACCOUNT_JSON=serviceAccountKey.json
+
+# App Configuration
+APP_SECRET_KEY=your_random_secret_key_here
 ```
+> *Note: If you have been provided a `serviceAccountKey.json` file by the team, ensure it is placed in the root directory.*
 
-Fill in your values in `.env` — see [.env.example](.env.example) for all required keys.
-
-### 5. Run locally
-
+### Step 5: Start the Platform
 ```bash
 streamlit run app.py
 ```
+The SentinelAI SOC will automatically open in your default web browser at `http://localhost:8501`.
 
 ---
 
-## Environment Variables
+## 🧪 Evaluation Guide (What to Test)
 
-See [.env.example](.env.example) for the full list. Required keys:
+To get the full experience of the platform, we recommend testing the following flows:
 
-| Variable | Source |
-|---|---|
-| `FIREBASE_API_KEY` | Firebase Console → Project Settings |
-| `FIREBASE_PROJECT_ID` | Firebase Console → Project Settings |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase Console → Service Accounts |
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `APP_SECRET_KEY` | Generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+### 1. Test Role-Based Access Control (Admin vs User)
+- **Log in as an Admin:** Use `admin` / `admin@123` (or the credentials provided to you).
+- Navigate to the **Admin Panel** in the sidebar.
+- Notice how you can assign roles (`user`, `analyst`, `admin`) to other registered users, or completely delete accounts using the 🗑️ button.
+- Notice the global **Audit Logs** at the bottom of the Admin Panel tracking all system activity.
 
-> **Never commit `.env` or any file containing real credentials.**
+### 2. Run a Vulnerability Scan
+- Navigate to the **Scanner** tab.
+- Enter a target URL (e.g., `http://example.com` or a known vulnerable test site like `http://testphp.vulnweb.com/`).
+- Click **Start Scan**.
+- Watch the live loading indicators as the engine progresses through:
+  - Header Analysis
+  - SSL/TLS Inspection
+  - Snapshot Capture & Defacement Detection
+  - **Active Penetration Testing** (DDoS, SQLi, XSS, Fuzzing)
+  - Mathematical Risk Scoring
+  - Google Gemini AI Generation
 
----
+### 3. Review the Executive Incident Report
+- Once the scan finishes, a comprehensive report will appear on the screen.
+- Expand the **Explainable AI (XAI)** sections for each vulnerability to see how Gemini explains the technical issue in plain English.
+- Read the **Hypothetical Attack Path** generated by Gemini, showing a realistic narrative of how a threat actor could chain the found vulnerabilities to breach the target.
 
-## Deployment (Streamlit Community Cloud)
-
-1. Push this repo to GitHub (ensure `.env` is in `.gitignore`).
-2. Go to [share.streamlit.io](https://share.streamlit.io) and connect the repo.
-3. Set all environment variables under **App Settings → Secrets** using the same keys from `.env.example`.
-4. Set **Main file path** to `app.py`.
-5. Deploy.
-
----
-
-## AI Disclaimer
-
-All AI-generated attack stories are **hypothetical scenarios** derived from observed security findings.  
-They do not represent actual exploitation and are clearly labelled:
-
-> *"This is a hypothetical attack scenario generated from the observed security findings."*
+### 4. View Analytics
+- Navigate to the **Dashboard** to see live visualizations of all scans performed, security posture trends, and a breakdown of vulnerabilities by severity.
 
 ---
 
-## Security Principles
+## 🔒 Security & AI Disclaimers
 
-- No hardcoded secrets — all credentials in `.env` or Streamlit Secrets
-- Input validation on all user-supplied data
-- Firebase Security Rules enforce data ownership
-- No raw stack traces exposed to users
-- HTML escaping applied where appropriate
+- **Active Scanning:** The platform actively sends payloads (like SQLi strings and rapid requests). Ensure you only scan assets you have permission to test.
+- **AI Hallucinations:** To prevent hallucinations, the Gemini AI engine is strictly isolated from the scanning process. It *only* receives deterministic findings and is mathematically barred from inventing vulnerabilities. 
+- **Attack Stories:** All AI-generated attack paths are **hypothetical scenarios** derived from observed findings to aid in threat modeling. They do not represent actual active exploitation.
 
 ---
-
-## License
-
-MIT — built for the System Siege Hackathon.
+*Built with ❤️ for the System Siege Hackathon.*
