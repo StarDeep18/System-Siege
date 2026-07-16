@@ -163,7 +163,8 @@ def fetch(url: str) -> Union[FetchResult, EvidenceError]:
                     current_url,
                     timeout=REQUEST_TIMEOUT_SECONDS,
                     allow_redirects=False, # We handle redirects manually for SSRF safety
-                    verify=True # We can now safely verify SSL because the hostname is intact
+                    verify=True, # We can now safely verify SSL because the hostname is intact
+                    stream=True # Prevent RAM exhaustion
                 )
         except requests.exceptions.Timeout:
             return EvidenceError(error_type="TIMEOUT", message=f"Connection timed out after {REQUEST_TIMEOUT_SECONDS} seconds.", url=current_url)
@@ -184,7 +185,18 @@ def fetch(url: str) -> Union[FetchResult, EvidenceError]:
             continue
             
         # 4. Final Target Reached
-        content = response.content[:MAX_RESPONSE_BYTES].decode("utf-8", errors="replace")
+        content_chunks = []
+        bytes_downloaded = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                content_chunks.append(chunk)
+                bytes_downloaded += len(chunk)
+                if bytes_downloaded > MAX_RESPONSE_BYTES:
+                    # Truncate and close connection to prevent OOM
+                    response.close()
+                    break
+                    
+        content = b"".join(content_chunks).decode("utf-8", errors="replace")
         response_time = time.time() - start_time
         resp_headers = {k: v for k, v in response.headers.items()}
         

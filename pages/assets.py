@@ -43,8 +43,8 @@ def _render_add_asset_form() -> None:
     cards.glass_container()
     
     # Form input fields
-    name = st.text_input("Asset Name", placeholder="e.g. Corporate Storefront", key="new_asset_name")
-    url = st.text_input("Target URL", placeholder="https://example.com", key="new_asset_url")
+    name = st.text_input("Asset Name", placeholder="e.g. Corporate Storefront", key="new_asset_name", max_chars=2000)
+    url = st.text_input("Target URL", placeholder="https://example.com", key="new_asset_url", max_chars=2000)
     
     st.markdown("<br>", unsafe_allow_html=True)
     

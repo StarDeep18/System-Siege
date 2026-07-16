@@ -5,6 +5,7 @@ All cards use custom styles from theme.css via HTML layout injections.
 
 from __future__ import annotations
 
+import html
 import streamlit as st
 from utils.helpers import score_to_color, score_to_level
 
@@ -54,11 +55,11 @@ def scan_result_card(scan: dict) -> None:
         f"""
         <div class="glass-panel" style="margin-bottom: 0.75rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <span style="font-weight: 600; color: #F1F5F9; font-size: 1rem;">{scan.get('asset_name')}</span>
+                <span style="font-weight: 600; color: #F1F5F9; font-size: 1rem;">{html.escape(scan.get('asset_name', ''))}</span>
                 {badge}
             </div>
             <div style="font-size: 0.8rem; color: #94A3B8; word-break: break-all; margin-bottom: 0.5rem;">
-                {scan.get('url')}
+                {html.escape(scan.get('url', ''))}
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; font-size: 0.75rem;">
                 <span class="cyber-badge {defacement_badge_class}" style="font-size: 0.65rem; padding: 0.15rem 0.5rem;">
@@ -89,11 +90,11 @@ def asset_card(asset: dict, key_prefix: str = "") -> tuple[bool, bool]:
         f"""
         <div class="glass-panel" style="margin-bottom: 1rem; padding: 1.25rem !important;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                <span style="font-weight: 600; color: #F1F5F9; font-size: 1.05rem;">{asset.get('name')}</span>
+                <span style="font-weight: 600; color: #F1F5F9; font-size: 1.05rem;">{html.escape(asset.get('name', ''))}</span>
                 {badge}
             </div>
             <div style="font-size: 0.8rem; color: #94A3B8; margin-bottom: 0.75rem; word-break: break-all;">
-                {asset.get('url')}
+                {html.escape(asset.get('url', ''))}
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <span class="cyber-badge {defacement_badge_class}" style="font-size: 0.65rem; padding: 0.15rem 0.5rem;">
@@ -130,14 +131,14 @@ def report_card(report: dict, key_prefix: str = "") -> bool:
         f"""
         <div class="glass-panel" style="margin-bottom: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <span style="font-weight: 600; color: #F1F5F9; font-size: 1.05rem;">{report.get('title')}</span>
+                <span style="font-weight: 600; color: #F1F5F9; font-size: 1.05rem;">{html.escape(report.get('title', ''))}</span>
                 {badge}
             </div>
             <div style="font-size: 0.85rem; color: #94A3B8; margin-bottom: 0.75rem;">
-                Asset: <b>{report.get('asset')}</b>
+                Asset: <b>{html.escape(report.get('asset', ''))}</b>
             </div>
             <p style="font-size: 0.8rem; color: #64748B; margin-bottom: 1rem; line-height: 1.4;">
-                {report.get('summary')}
+                {html.escape(report.get('summary', ''))}
             </p>
             <div style="font-size: 0.7rem; color: #475569; margin-bottom: 0.5rem;">
                 Generated: {formatted_time}

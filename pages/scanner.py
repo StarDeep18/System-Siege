@@ -25,6 +25,7 @@ Wires the real pipeline:
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -118,6 +119,7 @@ def _render_scan_form() -> None:
                 placeholder="https://example.com",
                 key="scanner_url_input",
                 label_visibility="collapsed",
+                max_chars=2000,
             )
 
         with col_btn:
@@ -131,9 +133,15 @@ def _render_scan_form() -> None:
         st.markdown("</div>", unsafe_allow_html=True)
 
     if scan_btn:
-        if not url or not url.strip():
+        current_time = time.time()
+        last_scan_time = st.session_state.get('last_scan_time', 0)
+        
+        if current_time - last_scan_time < 15:
+            st.error(f"Please wait {int(15 - (current_time - last_scan_time))} seconds before scanning again.")
+        elif not url or not url.strip():
             st.error("Please enter a valid target URL.")
         else:
+            st.session_state['last_scan_time'] = current_time
             _run_scan(url.strip())
 
 
