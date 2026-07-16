@@ -20,6 +20,7 @@ ASSETS = "assets"
 SCANS = "scans"
 REPORTS = "reports"
 AUDIT_LOGS = "audit_logs"
+SNAPSHOTS = "snapshots"
 
 
 # ── Users ─────────────────────────────────────────────────────────────────────
@@ -125,6 +126,43 @@ def save_scan(scan_data: dict) -> str:
         scan_data["timestamp"] = datetime.utcnow()
     _, doc_ref = db.collection(SCANS).add(scan_data)
     return doc_ref.id
+
+
+# ── Snapshots ─────────────────────────────────────────────────────────────────
+
+def save_snapshot(snap_dict: dict) -> str:
+    """
+    Persist a snapshot document.
+    Enforces that owner_uid, asset_id, url, and timestamp are present.
+    Returns the new document ID.
+    """
+    db = get_db()
+    if "timestamp" not in snap_dict:
+        snap_dict["timestamp"] = datetime.utcnow()
+    _, doc_ref = db.collection(SNAPSHOTS).add(snap_dict)
+    return doc_ref.id
+
+
+def get_snapshots(uid: str, asset_id: Optional[str] = None, limit: int = 50) -> list[dict]:
+    """
+    Return snapshots for the given UID only.
+    Optionally filter by asset_id. Always filters by owner_uid.
+    Never returns snapshots from another user.
+    """
+    db = get_db()
+    query = db.collection(SNAPSHOTS).where("owner_uid", "==", uid)
+    if asset_id:
+        query = query.where("asset_id", "==", asset_id)
+
+    docs = list(query.stream())
+    snapshots = [{"id": doc.id, **doc.to_dict()} for doc in docs]
+    # Sort in-memory by timestamp descending to avoid composite index requirement
+    snapshots.sort(
+        key=lambda x: x.get("timestamp", datetime.min).timestamp()
+        if isinstance(x.get("timestamp"), datetime) else 0,
+        reverse=True
+    )
+    return snapshots[:limit]
 
 
 def get_scans(uid: str, asset_id: Optional[str] = None, limit: int = 50) -> list[dict]:

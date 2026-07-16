@@ -259,23 +259,15 @@ def _run_scan(raw_url: str) -> None:
     # ── Step 11: Build Incident ───────────────────────────────────────────────
     with st.status("Step 11 — Building Incident…", expanded=False):
         uid = st.session_state.get("uid", "")
-        # Find or create asset_id based on URL
-        db_client = db.get_db()
-        assets_query = db_client.collection("sites").where("url", "==", result.url).stream()
-        assets = list(assets_query)
-        if assets:
-            asset_id = assets[0].id
+        # Find or create asset_id in the uid-scoped 'assets' collection
+        existing_assets = db.get_assets(uid)
+        matching = [a for a in existing_assets if a.get("url") == result.url]
+        if matching:
+            asset_id = matching[0]["id"]
         else:
-            # Create a new asset on the fly
-            asset_ref = db_client.collection("sites").document()
-            asset_ref.set({
-                "uid": uid,
-                "url": result.url,
-                "name": result.hostname,
-                "added": datetime.utcnow()
-            })
-            asset_id = asset_ref.id
-            
+            # Create a new asset owned by this user
+            asset_id = db.add_asset(uid, result.url, result.hostname)
+
         incident = incident_builder.build_incident(evidence, assessment, xai_output, story, asset_id, uid)
         st.write("✅ Incident built.")
 
@@ -316,10 +308,13 @@ def _run_scan(raw_url: str) -> None:
         incident_id = db.save_scan(incident_dict)
         incident_dict["id"] = incident_id
         
-        # Save snapshot for visual diff history
+        # Save snapshot — always stamp owner_uid, asset_id, url, and timestamp
         snap_dict = snapshot.to_firestore_dict(snap)
-        snap_dict["site_id"] = asset_id
-        db_client.collection("snapshots").add(snap_dict)
+        snap_dict["owner_uid"] = uid
+        snap_dict["asset_id"] = asset_id
+        snap_dict["url"] = result.url
+        snap_dict["timestamp"] = datetime.utcnow()
+        db.save_snapshot(snap_dict)
         
         st.session_state["last_incident"] = incident_dict
         
