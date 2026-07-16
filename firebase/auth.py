@@ -12,11 +12,13 @@ import requests
 from firebase_admin import auth
 
 from firebase.config import get_web_config
+from utils import auth_helpers
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _SIGN_IN_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
 _SIGN_UP_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signUp"
+_VERIFY_EMAIL_URL = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode"
 
 
 # ── Public Interface ──────────────────────────────────────────────────────────
@@ -43,7 +45,8 @@ def sign_in(email: str, password: str) -> dict:
         return resp.json()
         
     error_msg = resp.json().get("error", {}).get("message", "Authentication failed.")
-    raise ValueError(f"Sign-in failed: {error_msg}")
+    mapped_error = auth_helpers.map_firebase_error(error_msg)
+    raise ValueError(mapped_error)
 
 
 def sign_up(email: str, password: str) -> dict:
@@ -68,7 +71,34 @@ def sign_up(email: str, password: str) -> dict:
         return resp.json()
         
     error_msg = resp.json().get("error", {}).get("message", "Registration failed.")
-    raise ValueError(f"Sign-up failed: {error_msg}")
+    mapped_error = auth_helpers.map_firebase_error(error_msg)
+    raise ValueError(mapped_error)
+
+
+def send_verification_email(id_token: str) -> None:
+    """
+    Send a verification email to the user using the Firebase REST API.
+    """
+    config = get_web_config()
+    api_key = config.get("apiKey")
+    if not api_key:
+        return
+
+    payload = {
+        "requestType": "VERIFY_EMAIL",
+        "idToken": id_token
+    }
+    requests.post(f"{_VERIFY_EMAIL_URL}?key={api_key}", json=payload)
+
+
+def get_user_info(uid: str):
+    """
+    Fetch user info using Firebase Admin SDK to check email_verified.
+    """
+    try:
+        return auth.get_user(uid)
+    except Exception as e:
+        raise ValueError(f"Failed to retrieve user data: {str(e)}")
 
 
 def verify_id_token(id_token: str) -> dict:

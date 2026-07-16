@@ -21,6 +21,8 @@ SCANS = "scans"
 REPORTS = "reports"
 AUDIT_LOGS = "audit_logs"
 SNAPSHOTS = "snapshots"
+AUTH_LOGS = "auth_logs"
+LOGIN_ATTEMPTS = "login_attempts"
 
 
 # ── Users ─────────────────────────────────────────────────────────────────────
@@ -240,4 +242,48 @@ def get_audit_logs(limit: int = 200) -> list[dict]:
     query = db.collection(AUDIT_LOGS).order_by("timestamp", direction="DESCENDING").limit(limit)
     docs = query.stream()
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
+
+
+# ── Auth Logs & Monitoring ────────────────────────────────────────────────────
+
+def log_auth_event(uid: str, email: str, ip: str, action: str, status: str) -> None:
+    """
+    Log an authentication event to the dedicated auth_logs collection.
+    Actions: REGISTER, LOGIN, EMAIL_VERIFICATION, LOGOUT
+    Statuses: SUCCESS, FAILED
+    """
+    db = get_db()
+    db.collection(AUTH_LOGS).add({
+        "timestamp": datetime.utcnow(),
+        "uid": uid,
+        "email": email,
+        "ip": ip,
+        "action": action,
+        "status": status
+    })
+
+
+def record_failed_login(email: str) -> int:
+    """
+    Increment the failed login attempt counter for the given email.
+    Returns the new failed attempt count.
+    """
+    db = get_db()
+    doc_ref = db.collection(LOGIN_ATTEMPTS).document(email.lower())
+    doc = doc_ref.get()
+    
+    if doc.exists:
+        count = doc.to_dict().get("attempts", 0) + 1
+    else:
+        count = 1
+        
+    doc_ref.set({"attempts": count, "last_attempt": datetime.utcnow()}, merge=True)
+    return count
+
+
+def reset_failed_login(email: str) -> None:
+    """Reset the failed login counter on successful authentication."""
+    db = get_db()
+    db.collection(LOGIN_ATTEMPTS).document(email.lower()).set({"attempts": 0}, merge=True)
+
 
