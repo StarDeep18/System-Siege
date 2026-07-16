@@ -51,10 +51,27 @@ def _render_login_tab() -> None:
         submit = st.form_submit_button("Sign In", use_container_width=True)
         
         if submit:
+            st.session_state.pop("show_resend_verification", None)
+            st.session_state.pop("unverified_email", None)
             if not email or not password:
                 st.error("Please enter both email and password.")
             else:
                 _handle_login(email, password)
+
+    if st.session_state.get("show_resend_verification"):
+        unverified_email = st.session_state.get("unverified_email")
+        id_token = st.session_state.get("show_resend_verification")
+        
+        st.write("")
+        if st.button("Resend Verification Email", key="resend_ver_btn", use_container_width=True):
+            try:
+                firebase_auth.send_verification_email(id_token)
+                firebase_db.log_auth_event("unknown", unverified_email, "127.0.0.1", "EMAIL_VERIFICATION_SENT", "SUCCESS")
+                st.success("Verification email sent! Please check your inbox.")
+                st.session_state.pop("show_resend_verification", None)
+                st.session_state.pop("unverified_email", None)
+            except Exception as e:
+                st.error("Failed to send verification email. Please try again.")
 
     # Security Notice
     st.markdown(
@@ -142,11 +159,9 @@ def _handle_login(email: str, password: str) -> None:
             user_info = firebase_auth.get_user_info(uid)
             if not user_info.email_verified:
                 firebase_db.log_auth_event(uid, email, "127.0.0.1", "LOGIN", "FAILED_UNVERIFIED")
+                st.session_state["show_resend_verification"] = id_token
+                st.session_state["unverified_email"] = email
                 st.error("Your email address has not yet been verified.")
-                if st.button("Resend Verification Email"):
-                    firebase_auth.send_verification_email(id_token)
-                    firebase_db.log_auth_event(uid, email, "127.0.0.1", "EMAIL_VERIFICATION_SENT", "SUCCESS")
-                    st.success("Verification email sent! Please check your inbox.")
                 return
                 
             # Reset failed attempts
