@@ -20,7 +20,11 @@ def capture_page(url: str, save_dir: str = "data/evidence") -> dict:
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # Added --no-sandbox and --disable-dev-shm-usage for Streamlit Cloud compatibility
+        browser = p.chromium.launch(
+            headless=True,
+            args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        )
         context = browser.new_context(ignore_https_errors=True)
         page = context.new_page()
         
