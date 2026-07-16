@@ -18,6 +18,7 @@ import pages.reports as reports
 import pages.audit as audit
 import pages.settings as settings
 import pages.admin as admin
+import pages.visual_diff as visual_diff
 
 # ── Theme CSS Loader ──────────────────────────────────────────────────────────
 
@@ -75,6 +76,8 @@ def _route() -> None:
         assets.render()
     elif page == "Incident Reports":
         reports.render()
+    elif page == "Visual Diff":
+        visual_diff.render()
     elif page == "Audit Timeline":
         audit.render()
     elif page == "Settings":

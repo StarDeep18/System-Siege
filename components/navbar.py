@@ -19,6 +19,7 @@ def render() -> None:
         ("🔍", "Scan Website"),
         ("🖥️", "Asset Management"),
         ("📄", "Incident Reports"),
+        ("👁️", "Visual Diff"),
         ("📋", "Audit Timeline"),
         ("⚙️", "Settings"),
     ]
