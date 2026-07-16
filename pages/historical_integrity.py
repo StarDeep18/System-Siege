@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import difflib
 import io
+import os
 import streamlit as st
 import numpy as np
 from PIL import Image
@@ -34,16 +35,26 @@ def render() -> None:
 
     db = firestore.client()
 
-    # 1. Fetch sites
     try:
         sites_ref = db.collection("sites").stream()
         sites = {site.id: site.to_dict() for site in sites_ref}
     except Exception as e:
         st.error(f"Failed to fetch sites from Firestore: {e}")
-        return
+        sites = {}
+        
+    st.markdown("### Direct Link Scan")
+    col_url, col_btn = st.columns([0.8, 0.2])
+    with col_url:
+        adhoc_url = st.text_input("Enter URL to scan and add to monitoring", placeholder="https://example.com", label_visibility="collapsed")
+    with col_btn:
+        if st.button("Scan Now", type="primary", use_container_width=True):
+            if adhoc_url:
+                import pages.scanner as scanner
+                scanner._run_scan(adhoc_url.strip())
+                st.rerun()
 
     if not sites:
-        st.info("No monitored sites found. Please add a site first.")
+        st.info("No monitoring history found. Please enter a URL above to run your first scan.")
         return
 
     # Create options mapping Name -> ID
@@ -72,10 +83,9 @@ def render() -> None:
         
     site_id = site_options[selected_site_name]
     
-    # Check if a forced scan is requested
-    if st.button("Trigger Scheduled Scan Now", type="primary"):
+    if st.button("Trigger Scheduled Scan Now", key="trigger_schedule"):
         st.info("Triggering background scan using Playwright and Risk Engine...")
-        import services.scanner as scanner
+        import pages.scanner as scanner
         site_url = sites[site_id].get("url")
         if site_url:
             scanner._run_scan(site_url)
@@ -83,8 +93,10 @@ def render() -> None:
 
     # 2. Fetch Snapshots
     try:
-        snapshots_ref = db.collection("snapshots").where("site_id", "==", site_id).order_by("captured_at", direction=firestore.Query.DESCENDING).stream()
+        snapshots_ref = db.collection("snapshots").where("site_id", "==", site_id).stream()
         snapshots = [doc.to_dict() | {"id": doc.id} for doc in snapshots_ref]
+        # Sort in memory to avoid requiring a Firestore Composite Index
+        snapshots.sort(key=lambda x: str(x.get("captured_at", "")), reverse=True)
     except Exception as e:
         st.error(f"Failed to fetch snapshots: {e}")
         return

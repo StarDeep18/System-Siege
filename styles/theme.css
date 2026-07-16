@@ -18,6 +18,7 @@ html, body, [class*="css"] {
 /* Hide default Streamlit clutter */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
+[data-testid="stSidebarNav"] {display: none;}
 
 /* Increase global whitespace in the main block */
 .block-container {

@@ -259,7 +259,23 @@ def _run_scan(raw_url: str) -> None:
     # ── Step 11: Build Incident ───────────────────────────────────────────────
     with st.status("Step 11 — Building Incident…", expanded=False):
         uid = st.session_state.get("uid", "")
-        asset_id = str(uuid.uuid4()) # In a real flow, you'd lookup the actual asset_id
+        # Find or create asset_id based on URL
+        db_client = db.get_db()
+        assets_query = db_client.collection("sites").where("url", "==", result.url).stream()
+        assets = list(assets_query)
+        if assets:
+            asset_id = assets[0].id
+        else:
+            # Create a new asset on the fly
+            asset_ref = db_client.collection("sites").document()
+            asset_ref.set({
+                "uid": uid,
+                "url": result.url,
+                "name": result.hostname,
+                "added": datetime.utcnow()
+            })
+            asset_id = asset_ref.id
+            
         incident = incident_builder.build_incident(evidence, assessment, xai_output, story, asset_id, uid)
         st.write("✅ Incident built.")
 
@@ -299,6 +315,11 @@ def _run_scan(raw_url: str) -> None:
         
         incident_id = db.save_scan(incident_dict)
         incident_dict["id"] = incident_id
+        
+        # Save snapshot for visual diff history
+        snap_dict = snapshot.to_firestore_dict(snap)
+        snap_dict["site_id"] = asset_id
+        db_client.collection("snapshots").add(snap_dict)
         
         st.session_state["last_incident"] = incident_dict
         

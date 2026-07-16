@@ -1,6 +1,8 @@
 import os
 import uuid
 import hashlib
+import sys
+import asyncio
 from playwright.sync_api import sync_playwright
 
 def capture_page(url: str, save_dir: str = "data/evidence") -> dict:
@@ -14,10 +16,38 @@ def capture_page(url: str, save_dir: str = "data/evidence") -> dict:
     img_path = os.path.join(save_dir, f"{run_id}.png")
     html_path = os.path.join(save_dir, f"{run_id}.html")
     
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(ignore_https_errors=True)
         page = context.new_page()
+        
+        # --- SSRF Guard Interceptor ---
+        resolved_cache = {}
+        def block_internal(route):
+            request = route.request
+            req_url = request.url
+            if request.resource_type in ["document", "fetch", "xhr"]:
+                import urllib.parse
+                hostname = urllib.parse.urlparse(req_url).hostname
+                if hostname and hostname not in resolved_cache:
+                    try:
+                        from security.ssrf_guard import resolve_host, is_private_ip, SSRFError
+                        ips = resolve_host(req_url)
+                        for ip in ips:
+                            if is_private_ip(ip):
+                                raise SSRFError(f"Blocked IP: {ip}")
+                        resolved_cache[hostname] = True
+                    except Exception as e:
+                        print(f"Playwright SSRF Blocked: {req_url} ({e})")
+                        route.abort("accessdenied")
+                        return
+            route.continue_()
+            
+        page.route("**/*", block_internal)
+        # ------------------------------
         
         try:
             # We use networkidle to ensure the page has loaded dynamic content

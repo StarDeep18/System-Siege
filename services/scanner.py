@@ -20,7 +20,7 @@ from evidence_engine.fetcher import FetchResult as SnapshotResult
 from evidence_engine.diff import DiffResult as DefacementResult
 from evidence_engine.fetcher import fetch as fetch_snapshot
 from evidence_engine.diff import compare as compare_snapshots
-from evidence_engine.fetcher import extract_visible_text as extract_text
+from evidence_engine.snapshot import _extract_visible_text as extract_text
 from evidence_engine.diff import compute_similarity
 
 __all__ = [
