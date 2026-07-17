@@ -300,8 +300,7 @@ def _render_kpi_row(
 
 def _render_attack_path_explorer(incident: Optional[dict]) -> None:
     """
-    Attack Path Explorer — renders real chains from the Incident.
-    Attack chain data is stored in incident['attack_chain_analysis'] by builder.py.
+    Attack Path Explorer — renders a visual flow (cards/arrows) with an interactive side panel.
     """
     st.markdown(
         "<div style='font-family:\"Inter\",sans-serif; font-size:1.2rem; font-weight:600;"
@@ -314,16 +313,17 @@ def _render_attack_path_explorer(incident: Optional[dict]) -> None:
         return
 
     chains_data = incident.get("attack_chain_analysis", {})
-    chain_count = chains_data.get("chain_count", 0)
-    chain_titles = chains_data.get("chain_titles", [])
-    confidence = chains_data.get("confidence", None)
-    coverage = chains_data.get("coverage_pct", None)
+    chains = chains_data.get("chains", [])
+    
+    if not chains:
+        _no_data_panel("No complete attack path was identified based on the collected evidence.")
+        return
 
-    # Findings list for node rendering
-    findings = incident.get("findings", [])
-
-    if not chain_count and not findings:
-        _no_data_panel("No attack chains generated. Complete a full scan with AI enabled.")
+    # Use the first chain for visualization
+    chain = chains[0]
+    nodes = chain.get("nodes", [])
+    if not nodes:
+        _no_data_panel("No complete attack path was identified based on the collected evidence.")
         return
 
     st.markdown(
@@ -331,100 +331,88 @@ def _render_attack_path_explorer(incident: Optional[dict]) -> None:
         " border:1px solid #334155;'>",
         unsafe_allow_html=True,
     )
+    
+    st.markdown(f"<div style='font-size:0.95rem; font-weight:600; color:#f1f5f9; margin-bottom:1rem;'>{chain.get('chain_title', 'Hypothetical Attack Path')}</div>", unsafe_allow_html=True)
 
-    # Render chain titles as section headers
-    if chain_titles:
-        for i, title in enumerate(chain_titles):
-            st.markdown(
-                f"""
-<div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
-<div style="font-size:0.72rem; font-weight:600; color:#2563eb;
-                                 text-transform:uppercase; letter-spacing:0.05em;">Chain {i+1}</div>
-<div style="font-size:0.95rem; font-weight:600; color:#f1f5f9;">{title}</div>
+    # Create two columns: left for the flow, right for the side panel
+    path_col, details_col = st.columns([1, 1.2], gap="large")
+
+    with path_col:
+        st.markdown("<div style='font-size:0.8rem; color:#94a3b8; font-weight:600; text-transform:uppercase; margin-bottom:1rem;'>Attack Sequence</div>", unsafe_allow_html=True)
+        for i, node in enumerate(nodes):
+            node_id = node.get("node_id")
+            name = node.get("name", "Unknown Step")
+            is_selected = st.session_state.get("selected_node_id") == node_id
+            
+            # Use a Streamlit button disguised as a card
+            if st.button(f"{i+1}. {name}", key=f"node_{node_id}", use_container_width=True, type="primary" if is_selected else "secondary"):
+                st.session_state["selected_node_id"] = node_id
+                st.rerun()
+            
+            # Draw an arrow between nodes
+            if i < len(nodes) - 1:
+                st.markdown("<div style='text-align:center; color:#64748b; font-size:1.2rem; padding:0.1rem 0;'>↓</div>", unsafe_allow_html=True)
+
+    with details_col:
+        st.markdown("<div style='font-size:0.8rem; color:#94a3b8; font-weight:600; text-transform:uppercase; margin-bottom:1rem;'>Step Details</div>", unsafe_allow_html=True)
+        selected_id = st.session_state.get("selected_node_id")
+        if not selected_id and nodes:
+            # Default to the first node
+            selected_id = nodes[0].get("node_id")
+            
+        selected_node = next((n for n in nodes if n.get("node_id") == selected_id), None)
+        
+        if selected_node:
+            sev = selected_node.get("risk_reference", "Medium")
+            _SEV_COLOR = {"Critical": "#dc2626", "High": "#ef4444", "Medium": "#f59e0b", "Low": "#64748b", "Informational": "#3b82f6"}
+            color = _SEV_COLOR.get(sev, "#64748b")
+            
+            confidence = selected_node.get("confidence", "High")
+            if isinstance(confidence, int):
+                # Fallback mapping if backend still gives int
+                confidence = "High" if confidence > 80 else ("Medium" if confidence > 50 else "Low")
+            
+            st.markdown(f"""
+<div style='background-color:#0f172a; padding:1.25rem; border-radius:10px; border:1px solid #334155;'>
+<div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem;'>
+<div style='font-size:1.05rem; font-weight:600; color:#f8fafc;'>{selected_node.get('name')}</div>
+<div style='display:flex; gap:0.4rem;'>
+<span style='background-color:rgba(255,255,255,0.05); padding:0.15rem 0.4rem; border-radius:4px; font-size:0.7rem; color:{color}; border:1px solid {color};'>{sev.upper()}</span>
+<span style='background-color:rgba(59,130,246,0.1); padding:0.15rem 0.4rem; border-radius:4px; font-size:0.7rem; color:#60a5fa; border:1px solid rgba(59,130,246,0.25);'>Conf: {str(confidence).upper()}</span>
 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    # Render findings as attack nodes
-    if findings:
-        _render_findings_as_nodes(findings)
-    else:
-        st.markdown(
-            "<div style='color:#64748b; font-size:0.9rem; padding:0.5rem 0;'>"
-            "Findings will appear here after a completed scan.</div>",
-            unsafe_allow_html=True,
-        )
-
-    # Coverage/confidence footer
-    if confidence is not None or coverage is not None:
-        meta_parts = []
-        if confidence is not None:
-            meta_parts.append(f"Chain confidence: {confidence}%")
-        if coverage is not None:
-            meta_parts.append(f"Coverage: {coverage}%")
-        st.markdown(
-            f"<div style='font-size:0.75rem; color:#475569; margin-top:0.75rem;'>"
-            f"{' · '.join(meta_parts)}</div>",
-            unsafe_allow_html=True,
-        )
-
+</div>
+<div style='margin-bottom:1rem;'>
+<div style='font-size:0.75rem; color:#94a3b8; font-weight:600; text-transform:uppercase; margin-bottom:0.25rem;'>Why this is possible</div>
+<div style='font-size:0.85rem; color:#f1f5f9; line-height:1.5;'>{selected_node.get('description')}</div>
+</div>
+<div style='margin-bottom:0.5rem;'>
+<div style='font-size:0.75rem; color:#94a3b8; font-weight:600; text-transform:uppercase; margin-bottom:0.25rem;'>Evidence Collected</div>
+<div style='font-size:0.8rem; color:#cbd5e1; font-family:monospace; background:#1e293b; padding:0.4rem; border-radius:4px; border:1px solid #334155;'>{selected_node.get('evidence_reference', 'No exact evidence ref')}</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
+            
+            fix_ref = selected_node.get("fix_reference")
+            mitigations = chain.get("mitigations", [])
+            mitigation = next((m for m in mitigations if m.get("mitigation_id") == fix_ref), None)
+            
+            if mitigation:
+                st.markdown(f"""
+<div style='margin-top:0.75rem; background-color:rgba(16,185,129,0.05); padding:1rem; border-radius:10px; border:1px solid rgba(16,185,129,0.2);'>
+<div style='font-size:0.75rem; color:#10b981; font-weight:600; text-transform:uppercase; margin-bottom:0.4rem;'>How to Prevent It</div>
+<div style='font-size:0.85rem; color:#f1f5f9; margin-bottom:0.4rem;'><strong>Action:</strong> {mitigation.get('action_required')}</div>
+<div style='font-size:0.8rem; color:#cbd5e1; line-height:1.4;'><strong>Why it works:</strong> {mitigation.get('why_it_breaks_chain')}</div>
+</div>
+""", unsafe_allow_html=True)
+    
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _render_findings_as_nodes(findings: list) -> None:
-    """Render each finding as a styled node in the attack path."""
-    _SEV_COLOR = {
-        "Critical": "#dc2626", "High": "#ef4444",
-        "Medium": "#f59e0b",   "Low": "#64748b",
-        "Informational": "#3b82f6",
-}
-    for i, f in enumerate(findings):
-        if isinstance(f, dict):
-            title    = f.get("finding", f.get("title", "Finding"))
-            sev      = f.get("severity", "Low")
-            evidence = f.get("evidence_reference", "")
-            owasp    = f.get("owasp_mapping", f.get("owasp", ""))
-        else:
-            title, sev, evidence, owasp = str(f), "Low", "", ""
-
-        color = _SEV_COLOR.get(sev, "#64748b")
-
-        st.markdown(
-            f"""
-<div style="display:flex; align-items:stretch; gap:1.5rem; margin-bottom:0.5rem;">
-<div style="width:180px; background-color:#334155; padding:0.85rem 1rem;
-                             border-radius:8px; border-left:4px solid {color};
-                             font-size:0.88rem; font-weight:600; color:#f8fafc;
-                             display:flex; align-items:center; justify-content:center;
-                             text-align:center;">
-{title}
-</div>
-<div style="flex:1; padding:0.75rem 0; border-bottom:1px solid #334155;">
-<div style="display:flex; gap:0.5rem; margin-bottom:0.4rem; flex-wrap:wrap;">
-<span style="font-size:0.68rem; background-color:rgba(16,185,129,0.12);
-                                      color:#10b981; padding:0.15rem 0.45rem; border-radius:3px;
-                                      border:1px solid rgba(16,185,129,0.25);">
-{sev}
-</span>
-{f'<span style="font-size:0.68rem; background-color:rgba(37,99,235,0.12); color:#3b82f6; padding:0.15rem 0.45rem; border-radius:3px; border:1px solid rgba(37,99,235,0.25);">{owasp}</span>' if owasp else ""}
-</div>
-<div style="font-size:0.82rem; color:#94a3b8; font-family:'Inter',sans-serif;">
-{evidence if evidence else "See full report for evidence details."}
-</div>
-</div>
-</div>
-{"<div style='margin-left:90px; width:2px; height:1.5rem; background-color:#475569;'></div>" if i < len(findings) - 1 else ""}
-            """,
-            unsafe_allow_html=True,
-        )
-
-
 def _render_top_mitigations(incident: Optional[dict]) -> None:
-    """Top Mitigations — sourced from XAI recommendations in the Incident."""
+    """Top Mitigation — displays ONE primary recommendation from the top finding."""
     st.markdown(
         "<div style='font-family:\"Inter\",sans-serif; font-size:1.2rem; font-weight:600;"
-        " color:#f8fafc; margin-bottom:1rem;'>Top Mitigations</div>",
+        " color:#f8fafc; margin-bottom:1rem;'>Top Mitigation</div>",
         unsafe_allow_html=True,
     )
 
@@ -432,30 +420,81 @@ def _render_top_mitigations(incident: Optional[dict]) -> None:
         _no_data_panel("No mitigation data available.")
         return
 
-    recommendations = incident.get("top_recommendations", [])
-    if not recommendations:
+    findings = incident.get("findings", [])
+    if not findings:
         _no_data_panel("No recommendations generated. Run a scan with AI enabled.")
         return
 
-    for i, rec in enumerate(recommendations[:3]):
-        priority_label = "Top Priority" if i == 0 else f"Priority {i + 1}"
-        priority_color = "#ef4444" if i == 0 else ("#f59e0b" if i == 1 else "#64748b")
-        st.markdown(
-            f"""
-<div style='background-color:#1e293b; padding:1.25rem 1.5rem; border-radius:12px;
-                         border:1px solid #334155; margin-bottom:0.75rem;'>
-<div style="font-size:0.72rem; color:{priority_color}; font-weight:600;
-                             text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.4rem;">
-{priority_label}
+    top_finding = findings[0]
+    title = top_finding.get("title", "Finding")
+    why = top_finding.get("reason", "No reason provided.")
+    fix = top_finding.get("recommendation", "No specific fix provided.")
+    severity = top_finding.get("severity", "High")
+    improvement = top_finding.get("risk_contribution", 10)
+    sim_pct = incident.get("similarity_percent", 100.0)
+
+    # ── Alert Box & Sound Logic ──
+    trigger_alert = False
+    alert_msg = ""
+    if severity.upper() in ("CRITICAL", "HIGH"):
+        trigger_alert = True
+        alert_msg = f"SECURITY ALERT: High-level risk detected ({severity.upper()}). Immediate mitigation recommended."
+    elif sim_pct < 70:
+        trigger_alert = True
+        alert_msg = f"SECURITY ALERT: Severe defacement detected! Structural match is only {sim_pct}% (Below 70% threshold)."
+
+    alert_html = ""
+    if trigger_alert:
+        incident_id = incident.get("id", "unknown_id")
+        alert_html = f"""
+<script>
+    if (!window.sessionStorage.getItem('alert_played_{incident_id}')) {{
+        window.sessionStorage.setItem('alert_played_{incident_id}', 'true');
+        var audio = new Audio('https://www.soundjay.com/buttons/sounds/beep-01a.mp3');
+        audio.play().catch(e => console.log('Autoplay blocked:', e)).finally(() => {{
+            setTimeout(() => alert("{alert_msg}"), 100);
+        }});
+    }}
+</script>
+"""
+        st.markdown(alert_html, unsafe_allow_html=True)
+
+    # Convert the fix string into bullet points (checkmarks)
+    fix_lines = [line.strip().lstrip("-*").strip() for line in fix.split("\n") if line.strip()]
+    fix_html = "".join([
+        f"<div style='display:flex; align-items:start; gap:0.5rem; margin-bottom:0.4rem;'>"
+        f"<span style='color:#10b981;'>✔</span><span>{line}</span></div>"
+        for line in fix_lines
+    ])
+
+    priority_color = "#ef4444" if severity in ("Critical", "High") else ("#f59e0b" if severity == "Medium" else "#64748b")
+
+    st.markdown(
+        f"""
+<div style='background-color:#1e293b; padding:1.5rem; border-radius:12px; border:1px solid #334155; margin-bottom:0.75rem;'>
+<div style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; color:{priority_color}; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:1rem;">
+🛡 TOP RECOMMENDED ACTION
 </div>
-<div style="font-size:0.95rem; color:#f1f5f9; font-family:'Inter',sans-serif;
-                             line-height:1.5;">
-{rec}
+<div style="font-size:0.9rem; margin-bottom:0.75rem;">
+<strong style="color:#94a3b8;">Priority:</strong> <span style="color:{priority_color}; font-weight:600;">{severity.upper()}</span>
+</div>
+<div style="font-size:0.9rem; margin-bottom:0.75rem;">
+<strong style="color:#94a3b8;">Issue:</strong> <span style="color:#f1f5f9;">{title}</span>
+</div>
+<div style="font-size:0.9rem; margin-bottom:1rem;">
+<strong style="color:#94a3b8;">Why:</strong> <span style="color:#cbd5e1;">{why}</span>
+</div>
+<div style="font-size:0.9rem; margin-bottom:1rem; color:#f1f5f9;">
+<strong style="color:#94a3b8; display:block; margin-bottom:0.5rem;">Fix:</strong>
+{fix_html}
+</div>
+<div style="font-size:0.85rem; background-color:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.2); color:#10b981; padding:0.5rem 0.75rem; border-radius:6px; display:inline-block; font-weight:600;">
+Estimated Improvement: +{improvement} Security Score
 </div>
 </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_system_health(uid: str) -> None:

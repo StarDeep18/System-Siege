@@ -131,8 +131,15 @@ def explain(
                     model_name, attempt, _MAX_RETRIES, exc
                 )
                 
+                exc_str = str(exc).lower()
+                
+                # Fast fail for auth, quota, or invalid key errors to prevent hanging
+                if any(x in exc_str for x in ["429", "403", "400", "quota", "api_key", "invalid", "unauthenticated", "exceeded"]):
+                    log.error(f"Fast failing due to fatal API error: {exc}")
+                    return _degraded_output(assessment, f"AI features disabled (API Error: {exc})")
+
                 # If the model is not found, immediately break and try the next model
-                if "404" in str(exc) or "not found" in str(exc).lower():
+                if "404" in exc_str or "not found" in exc_str:
                     break
                     
                 if attempt < _MAX_RETRIES:
@@ -186,7 +193,7 @@ Every explanation must cite the evidence_reference provided.
 URL:      {url}
 Hostname: {hostname}
 
-== DETERMINISTIC RISK ASSESSMENT ==
+== DETERMINISTIC RISK ==
 Security Score:    {score} / 100
 Grade:             {grade}
 Overall Severity:  {severity}
@@ -212,13 +219,12 @@ Respond with valid JSON only. No markdown. No code fences. No extra text.
       "finding": "<exact title from the finding list above>",
       "confidence": "High",
       "evidence_reference": "<exact evidence_reference string from above>",
-      "reason": "Why this finding matters technically.",
+      "reason": "Explain why it matters in plain English. Max 2 sentences.",
       "owasp_mapping": "<OWASP category from the finding>",
-      "business_impact": "What could happen if this is exploited.",
-      "recommendation": "Specific, actionable fix in plain English.",
+      "business_impact": "Possible impact. Bullet points explaining what could realistically happen. No CVSS language.",
+      "recommendation": "Recommended Action. One clear action, max 3 bullet points. No long paragraphs.",
       "verification_checklist": [
-        "Step 1 to verify fix",
-        "Step 2 to verify fix"
+        "Step 1 to verify fix"
       ]
     }}
   ]
@@ -226,11 +232,12 @@ Respond with valid JSON only. No markdown. No code fences. No extra text.
 
 Rules:
 - findings array must contain exactly {len(assessment.findings)} item(s), one per finding above.
+- Tone: Senior SOC analyst explaining findings to a junior developer (CS student). Never sound academic.
+- Language: Replace jargon with simple language. (e.g., use 'Attacker' instead of 'Adversary' or 'Threat actor', use 'Series of attacks' instead of 'Exploit chain').
+- Length: Never generate more than 120 words per finding.
 - Do not add findings that are not in the list above.
 - Do not include any content from the scanned webpage.
 - confidence must be one of: High, Medium, Low.
-- Keep executive_summary under 80 words.
-- Keep each recommendation under 50 words.
 """
     return prompt
 
@@ -351,106 +358,76 @@ def _format_findings_for_prompt(findings: list[FindingReference]) -> str:
 
 _LOCAL_EXPLAIN_DATABASE = {
     "Missing Content-Security-Policy Header": {
-        "reason": "The Content-Security-Policy (CSP) HTTP header is missing, allowing malicious scripts to be injected and executed on the client browser.",
-        "business_impact": "Attackers can launch Cross-Site Scripting (XSS) attacks, steal user session cookies, redirect users to malicious landing pages, or perform clickjacking.",
-        "recommendation": "Implement a strict Content-Security-Policy header. Restrict scripts, styles, and images to trusted origins only, and disable unsafe-inline execution.",
-        "verification_checklist": [
-            "Run 'curl -I <URL>' and inspect headers.",
-            "Verify Content-Security-Policy header is present and configured correctly."
-        ]
+        "reason": "The Content-Security-Policy (CSP) header is missing. Without this, browsers cannot restrict where scripts load from.",
+        "business_impact": "- Attackers can inject malicious scripts.\n- User session cookies can be stolen.\n- The website can be modified without permission.",
+        "recommendation": "- Add a Content-Security-Policy header to the web server.\n- Restrict scripts to trusted sources only.",
+        "verification_checklist": ["Run 'curl -I <URL>' and check for the header."]
     },
     "Missing Strict-Transport-Security Header": {
-        "reason": "The Strict-Transport-Security (HSTS) header is missing. The browser is not forced to communicate exclusively over secure HTTPS channels, enabling HTTP downgrade attacks.",
-        "business_impact": "Active network attackers can intercept and capture sensitive session data via Man-in-the-Middle (MITM) redirection attacks.",
-        "recommendation": "Configure the web server or application to return the Strict-Transport-Security header with a max-age of at least one year (e.g., 31536000), including includeSubDomains.",
-        "verification_checklist": [
-            "Query headers and verify Strict-Transport-Security exists.",
-            "Ensure the max-age value is sufficiently large."
-        ]
+        "reason": "The website does not force browsers to use secure HTTPS connections. This means traffic might accidentally be sent over unencrypted HTTP.",
+        "business_impact": "- Attackers on the same network can intercept traffic.\n- Sensitive data like passwords can be stolen in transit.",
+        "recommendation": "- Enable the Strict-Transport-Security (HSTS) header on the server.\n- Ensure the max-age is set to at least one year.",
+        "verification_checklist": ["Query headers and ensure Strict-Transport-Security exists."]
     },
     "Missing X-Frame-Options Header": {
-        "reason": "The website is missing the X-Frame-Options or CSP frame-ancestors header, meaning it can be rendered inside a nested <frame> or <iframe> on an external site.",
-        "business_impact": "Enables clickjacking attacks, where an attacker tricks a user into clicking invisible buttons on your site by overlaying it on top of another page.",
-        "recommendation": "Add the X-Frame-Options HTTP response header set to DENY or SAMEORIGIN, or implement the modern frame-ancestors directive in your CSP.",
-        "verification_checklist": [
-            "Try loading the page inside an iframe on a local HTML test file.",
-            "Verify browser blocks rendering due to X-Frame-Options configuration."
-        ]
+        "reason": "The website does not prevent other sites from embedding it inside a frame. Attackers can overlay invisible buttons on top of your site.",
+        "business_impact": "- Users can be tricked into clicking things they didn't intend to (Clickjacking).\n- Unintended actions can be performed on the user's behalf.",
+        "recommendation": "- Add the X-Frame-Options header set to DENY or SAMEORIGIN.",
+        "verification_checklist": ["Try loading the page inside an iframe and verify it is blocked."]
     },
     "Missing X-Content-Type-Options Header": {
-        "reason": "The X-Content-Type-Options header is missing, which allows the browser to perform MIME-sniffing and treat non-executable file types as executable code.",
-        "business_impact": "Can lead to Cross-Site Scripting (XSS) if users are allowed to upload text or image files containing malicious scripts.",
-        "recommendation": "Add the X-Content-Type-Options: nosniff header to all web server responses.",
-        "verification_checklist": [
-            "Verify presence of X-Content-Type-Options: nosniff header in HTTP response headers."
-        ]
+        "reason": "The browser is allowed to guess the type of a file rather than trusting the server. Attackers can upload disguised files to run code.",
+        "business_impact": "- Non-executable files (like images) can be run as scripts.\n- Increased risk of Cross-Site Scripting (XSS).",
+        "recommendation": "- Add the X-Content-Type-Options: nosniff header to all responses.",
+        "verification_checklist": ["Verify the header is present in HTTP responses."]
     },
     "Server Header Discloses Technology": {
-        "reason": "The Server HTTP header returns detailed information exposing the name of the web server or technology stack.",
-        "business_impact": "Simplifies reconnaissance, enabling attackers to query vulnerability databases (CVEs) matching your exact server software versions.",
-        "recommendation": "Modify web server configurations (e.g. set server_tokens off in Nginx or strip headers in proxy/CDN settings) to conceal technology names and versions.",
-        "verification_checklist": [
-            "Send an HTTP request and confirm the Server header returns a generic value or is completely removed."
-        ]
+        "reason": "The server reveals its exact software name and version in the response headers. This gives attackers free information to find known weaknesses.",
+        "business_impact": "- Attackers can easily look up known vulnerabilities for your specific server version.\n- Speeds up the reconnaissance phase of an attack.",
+        "recommendation": "- Configure the web server (e.g., Nginx or Apache) to hide server version details.",
+        "verification_checklist": ["Send an HTTP request and confirm the Server header is generic."]
     },
     "Invalid TLS Certificate": {
-        "reason": "The SSL/TLS certificate used by the server is invalid (e.g. domain mismatch, self-signed, or untrusted root CA).",
-        "business_impact": "Visitors will see critical browser security warnings. All data transmitted is susceptible to decryption via Man-in-the-Middle (MITM) interception.",
-        "recommendation": "Replace the invalid certificate with a valid one signed by a trusted Certificate Authority (CA), ensuring the Common Name (CN) or SAN matches your domain.",
-        "verification_checklist": [
-            "Navigate to the page and verify browser shows a padlock.",
-            "Inspect the certificate chain to ensure it terminates at a trusted root."
-        ]
+        "reason": "The website's digital certificate is invalid or untrusted. Browsers cannot verify the identity of the server.",
+        "business_impact": "- Visitors will see critical security warnings.\n- Attackers can intercept and read all data sent to the server.",
+        "recommendation": "- Replace the certificate with a valid one signed by a trusted authority.\n- Ensure the domain name matches the certificate.",
+        "verification_checklist": ["Verify the browser shows a secure padlock."]
     },
     "TLS Certificate Has Expired": {
-        "reason": "The TLS certificate has exceeded its validity period and is no longer trusted.",
-        "business_impact": "Disrupts user traffic with secure connection warnings, indicating potential loss of confidentiality and integrity of session communication.",
-        "recommendation": "Renew the TLS certificate immediately using Let's Encrypt or your certificate authority, and configure automated certificate renewal cron jobs.",
-        "verification_checklist": [
-            "Check certificate details to confirm the new validity dates are in the future."
-        ]
+        "reason": "The website's digital certificate has passed its expiration date. Browsers will no longer trust the connection.",
+        "business_impact": "- Users are blocked from accessing the site by browser warnings.\n- Secure communication cannot be guaranteed.",
+        "recommendation": "- Renew the certificate immediately through your certificate authority.\n- Set up automated renewals to prevent this in the future.",
+        "verification_checklist": ["Check the new certificate validity dates."]
     },
     "Content Defacement Detected": {
-        "reason": "Significant deviations in the page layout or text structure were detected compared to the verified baseline snapshot.",
-        "business_impact": "Severe reputational damage, phishing risks, and loss of user trust due to malicious alterations of site content.",
-        "recommendation": "Revert the web site to a clean backup copy immediately. Audit access control lists, server logs, and admin accounts to identify the breach point.",
-        "verification_checklist": [
-            "Perform a code audit of the target page directory.",
-            "Compare file hashes with original repository code."
-        ]
+        "reason": "The visual appearance or structure of the page has changed significantly compared to the original baseline. This usually means the site has been hacked.",
+        "business_impact": "- The website may display malicious or inappropriate content.\n- Severe damage to the organization's reputation.",
+        "recommendation": "- Restore the website from a known clean backup immediately.\n- Investigate server logs to find how the attacker gained access.",
+        "verification_checklist": ["Compare the restored page against the original baseline."]
     },
     "SQL Injection Vulnerability Detected": {
-        "reason": "The scanner detected that input fields or URL parameters are vulnerable to SQL Injection, allowing raw SQL queries to be sent directly to the database.",
-        "business_impact": "Critical risk of complete database compromise, unauthorized administrative access, data theft, or data destruction.",
-        "recommendation": "Use parameterized queries, prepared statements, or ORM frameworks for all database operations. Implement strict input validation and WAF protection.",
-        "verification_checklist": [
-            "Test input fields using SQL payload testing.",
-            "Ensure database errors are suppressed and parameterized commands are in use."
-        ]
+        "reason": "The website allows raw database commands to be entered into input fields. Attackers can manipulate these inputs to talk directly to the database.",
+        "business_impact": "- Attackers can read, modify, or delete any data in the database.\n- Complete takeover of administrative accounts is possible.",
+        "recommendation": "- Use parameterized queries or prepared statements in the code.\n- Never paste user input directly into SQL strings.",
+        "verification_checklist": ["Test inputs with SQL payloads to ensure errors are handled safely."]
     },
     "Cross-Site Scripting (XSS) Detected": {
-        "reason": "Input parameters are returned directly to the client browser without sanitization or HTML encoding.",
-        "business_impact": "Session hijacking, redirection to malware, page defacement, and credential theft.",
-        "recommendation": "Context-aware output encoding (HTML, JavaScript, CSS context encoding) must be applied to all user input before rendering.",
-        "verification_checklist": [
-            "Test input values with XSS vectors. Confirm vectors are either encoded or safely stripped by a filter."
-        ]
+        "reason": "User input is displayed on the page without being sanitized. Attackers can input malicious scripts that will run in other users' browsers.",
+        "business_impact": "- Attackers can steal session cookies and take over user accounts.\n- Users can be redirected to fake login pages.",
+        "recommendation": "- Sanitize and encode all user input before displaying it on the screen.",
+        "verification_checklist": ["Test inputs with XSS payloads and verify they are neutralized."]
     },
     "Sensitive Files Exposed": {
-        "reason": "Directories, backup files, configuration files (e.g. .git, .env), or debug logs are publicly accessible.",
-        "business_impact": "High risk of exposing database credentials, API keys, intellectual property, and source code.",
-        "recommendation": "Implement strict access control rules (e.g. .htaccess or server directives) to deny access to sensitive directories and config files.",
-        "verification_checklist": [
-            "Confirm target paths return a 403 Forbidden or 404 Not Found response."
-        ]
+        "reason": "Private files (like configuration files, backups, or source code) are accessible to anyone on the internet.",
+        "business_impact": "- Passwords, API keys, and database credentials can be stolen.\n- Attackers gain a complete blueprint of the application.",
+        "recommendation": "- Update server rules to deny access to sensitive directories.\n- Move configuration files outside the public web folder.",
+        "verification_checklist": ["Verify sensitive file URLs return a 403 Forbidden error."]
     },
     "Missing Rate Limiting (DDoS Vulnerable)": {
-        "reason": "The target URL accepted a rapid burst of automated requests without responding with rate limit indicators or a 429 HTTP status code.",
-        "business_impact": "Vulnerability to denial of service attacks, brute forcing, API abuse, and high infrastructure costs.",
-        "recommendation": "Implement rate limiting policies (e.g. Nginx limit_req, Cloudflare rate limits, or middleware validation).",
-        "verification_checklist": [
-            "Run a load simulation tool and verify server responds with 429 status code for excess requests."
-        ]
+        "reason": "The server accepts a massive number of requests from the same user without slowing them down. Attackers can overwhelm the system.",
+        "business_impact": "- The website can crash and become unavailable to real users.\n- Attackers can guess passwords rapidly without being blocked.",
+        "recommendation": "- Implement rate limiting on the server to block users making too many requests.",
+        "verification_checklist": ["Run a load test to ensure the server eventually blocks rapid requests."]
     }
 }
 

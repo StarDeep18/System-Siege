@@ -24,7 +24,7 @@ class AttackMetadata(BaseModel):
     prompt_version: str = Field("1.0")
     model_name: str = Field("gemini-2.5-flash")
     generated_at: datetime = Field(default_factory=datetime.utcnow)
-    confidence: int = Field(..., description="Overall confidence in the narrative generation (0-100)")
+    confidence: str = Field(..., description="Overall confidence (Low/Medium/High/Very High)")
     disclaimer: str = Field(
         "This is a hypothetical attack scenario generated from verified security findings. No exploitation was performed.",
         description="Mandatory disclaimer that must lead the report."
@@ -33,7 +33,7 @@ class AttackMetadata(BaseModel):
 
 class EvidenceCoverage(BaseModel):
     """Demonstrates that the AI strictly adhered to the provided evidence."""
-    chain_confidence: int = Field(..., description="Confidence (0-100) that these specific chains are realistic")
+    chain_confidence: str = Field(..., description="Confidence (Low/Medium/High/Very High)")
     evidence_coverage_percentage: int = Field(..., description="Percentage of available findings successfully mapped into the attack graph")
     findings_used_count: int = Field(..., description="Total number of findings utilized")
     unused_findings_count: int = Field(..., description="Total number of findings that did not fit into an attack path")
@@ -45,7 +45,7 @@ class MITREReference(BaseModel):
     """Structured mapping to the MITRE ATT&CK framework."""
     tactic: str = Field(..., description="e.g., Initial Access, Execution, Persistence")
     technique: str = Field(..., description="e.g., Exploit Public-Facing Application")
-    confidence: int = Field(..., description="Confidence (0-100) in this specific MITRE mapping")
+    confidence: str = Field(..., description="Confidence (Low/Medium/High/Very High)")
 
 
 class AttackMitigation(BaseModel):
@@ -69,7 +69,7 @@ class AttackNode(BaseModel):
     evidence_reference: Optional[str] = Field(None, description="The specific raw evidence artifact cited")
     risk_reference: Optional[str] = Field(None, description="Reference to the assessed severity/priority")
     
-    confidence: int = Field(..., description="Confidence (0-100) that this node is realistically achievable")
+    confidence: str = Field(..., description="Confidence (Low/Medium/High/Very High)")
     mitre_mapping: Optional[MITREReference] = Field(None, description="MITRE mapping for this specific node")
     fix_reference: Optional[str] = Field(None, description="ID pointing to an AttackMitigation designed to break this node")
 

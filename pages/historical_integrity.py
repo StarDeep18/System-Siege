@@ -13,6 +13,8 @@ No snapshot from another user will ever appear here.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+import time
 import difflib
 import io
 import os
@@ -159,8 +161,8 @@ def render() -> None:
             db_client = db.get_db()
             asset_ref = db_client.collection(db.ASSETS).document(asset_id)
             
-            from datetime import timedelta
-            next_scan_time = datetime.utcnow() + timedelta(minutes=chosen_mins) if enable_monitoring else None
+            from datetime import datetime, timedelta, timezone
+            next_scan_time = datetime.now(timezone.utc) + timedelta(minutes=chosen_mins) if enable_monitoring else None
             
             asset_ref.update({
                 "monitoring_enabled": enable_monitoring,

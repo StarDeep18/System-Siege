@@ -57,7 +57,7 @@ def _scheduler_loop() -> None:
 
             # 2. Query Firestore database for active monitored assets
             db_client = firebase_db.get_db()
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             
             # Query all assets that have monitoring enabled
             assets_ref = db_client.collection(firebase_db.ASSETS).where("monitoring_enabled", "==", True).stream()

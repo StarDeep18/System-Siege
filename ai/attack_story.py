@@ -104,8 +104,14 @@ def generate(
                     "Gemini call failed with model %s on attempt %d/%d: %s",
                     model_name, attempt, _MAX_RETRIES, exc,
                 )
+                exc_str = str(exc).lower()
                 
-                if "404" in str(exc) or "not found" in str(exc).lower():
+                # Fast fail for auth, quota, or invalid key errors to prevent hanging
+                if any(x in exc_str for x in ["429", "403", "400", "quota", "api_key", "invalid", "unauthenticated", "exceeded"]):
+                    log.error(f"Fast failing due to fatal API error: {exc}")
+                    return _degraded_story(assessment, str(exc))
+
+                if "404" in exc_str or "not found" in exc_str:
                     break
                     
                 if attempt < _MAX_RETRIES:
@@ -115,7 +121,7 @@ def generate(
         f"Attack Path Explorer: Gemini API unavailable after trying all fallback models. "
         f"Last error: {last_exc}"
     )
-    return _empty_story(assessment)
+    return _degraded_story(assessment, str(last_exc))
 
 
 def build_prompt(assessment: RiskAssessment, xai: XAIOutput) -> str:
@@ -171,7 +177,7 @@ Respond with valid JSON only. No markdown. No code fences. No extra text.
 {{
   "executive_summary": "2-3 sentence plain-English overview of the hypothetical attack scenario.",
   "coverage": {{
-    "chain_confidence": 85,
+    "chain_confidence": "High",
     "evidence_coverage_percentage": 100,
     "findings_used_count": {finding_count},
     "unused_findings_count": 0
@@ -184,15 +190,15 @@ Respond with valid JSON only. No markdown. No code fences. No extra text.
         {{
           "node_id": "node-1",
           "name": "Short node label",
-          "description": "What a hypothetical attacker achieves here (defensive framing).",
+          "description": "What a hypothetical attacker achieves here (plain English, no jargon).",
           "finding_reference": "<EXACT title from FINDING CATALOGUE above>",
           "evidence_reference": "<exact evidence_reference string from the finding>",
           "risk_reference": "<severity level of the referenced finding>",
-          "confidence": 90,
+          "confidence": "High",
           "mitre_mapping": {{
             "tactic": "e.g. Initial Access",
             "technique": "e.g. Exploit Public-Facing Application",
-            "confidence": 80
+            "confidence": "High"
           }},
           "fix_reference": "mitigation-1"
         }}
@@ -201,7 +207,7 @@ Respond with valid JSON only. No markdown. No code fences. No extra text.
         {{
           "source_node_id": "node-1",
           "target_node_id": "node-2",
-          "transition_reason": "Why this transition is possible based on the findings.",
+          "transition_reason": "Why this transition is possible based on the findings (plain English).",
           "supporting_evidence": "The specific finding enabling this transition."
         }}
       ],
@@ -225,6 +231,9 @@ Rules:
 - Every node finding_reference must match an EXACT title from the FINDING CATALOGUE.
 - Every mitigation finding_id_reference must match an EXACT title from the FINDING CATALOGUE.
 - executive_summary must be under 100 words.
+- Tone: Senior SOC analyst explaining findings to a junior developer (CS student). Never sound academic.
+- Language: Replace jargon with simple language. (e.g., use 'Attacker' instead of 'Adversary' or 'Threat actor', use 'Series of attacks' instead of 'Exploit chain').
+- Confidence: MUST use categorical labels (Low, Medium, High, Very High). Do NOT use percentages.
 - Do NOT include any content from the scanned webpage.
 - All descriptions must be defensive framing — what to fix, not how to exploit.
 """
@@ -432,14 +441,14 @@ def _empty_story(assessment: RiskAssessment) -> AttackStory:
     """Return a minimal AttackStory when the assessment has no findings."""
     return AttackStory(
         metadata=AttackMetadata(
-            confidence=100,
+            confidence="Very High",
             disclaimer=_DISCLAIMER,
             model_name=_MODEL_NAME,
             prompt_version=_PROMPT_VERSION,
             generated_at=datetime.now(timezone.utc),
         ),
         coverage=EvidenceCoverage(
-            chain_confidence=100,
+            chain_confidence="Very High",
             evidence_coverage_percentage=100,
             findings_used_count=0,
             unused_findings_count=0,
@@ -558,7 +567,7 @@ def _degraded_story(assessment: RiskAssessment, reason: str) -> AttackStory:
             mitre = MITREReference(
                 tactic=tactic,
                 technique=technique,
-                confidence=90
+                confidence="High"
             )
         else:
             desc_text = f"Hypothetical attacker could leverage: {finding.title}. See evidence_reference for the deterministic source."
@@ -572,7 +581,7 @@ def _degraded_story(assessment: RiskAssessment, reason: str) -> AttackStory:
             finding_reference=finding.title,
             evidence_reference=finding.evidence_reference,
             risk_reference=finding.severity,
-            confidence=finding.confidence,
+            confidence="High",
             mitre_mapping=mitre,
             fix_reference=mitigation_id,
         ))
@@ -609,14 +618,14 @@ def _degraded_story(assessment: RiskAssessment, reason: str) -> AttackStory:
 
     return AttackStory(
         metadata=AttackMetadata(
-            confidence=80,
+            confidence="High",
             disclaimer=_DISCLAIMER,
             model_name="expert-local-fallback",
             prompt_version=_PROMPT_VERSION,
             generated_at=datetime.now(timezone.utc),
         ),
         coverage=EvidenceCoverage(
-            chain_confidence=80,
+            chain_confidence="High",
             evidence_coverage_percentage=100,
             findings_used_count=len(assessment.findings),
             unused_findings_count=0,

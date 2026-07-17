@@ -284,6 +284,9 @@ def _run_scan(raw_url: str) -> None:
         incident_dict["verified_sources"] = incident_builder._build_verified_sources(assessment)
         incident_dict["critical_issues_count"] = assessment.statistics.critical_count
         
+        sim_score = evidence.metrics.raw_metrics.get('similarity_score', 1.0)
+        incident_dict["similarity_percent"] = round(sim_score * 100, 2)
+        
         xai_by_title = {f.finding: f for f in xai_output.findings}
         findings_list = []
         for f in assessment.findings:
@@ -292,7 +295,11 @@ def _run_scan(raw_url: str) -> None:
                 "title": f.title,
                 "severity": f.severity,
                 "evidence_reference": f.evidence_reference,
-                "owasp_mapping": x_f.owasp_mapping if x_f else ", ".join(f.owasp)
+                "owasp_mapping": x_f.owasp_mapping if x_f else ", ".join(f.owasp),
+                "reason": x_f.reason if x_f else "",
+                "business_impact": x_f.business_impact if x_f else "",
+                "recommendation": x_f.recommendation if x_f else "",
+                "risk_contribution": f.risk_contribution if hasattr(f, "risk_contribution") else 10
             })
         incident_dict["findings"] = findings_list
         incident_dict["top_recommendations"] = [f.recommendation for f in xai_output.findings if f.recommendation]
@@ -302,7 +309,8 @@ def _run_scan(raw_url: str) -> None:
                 "chain_count": len(story.chains),
                 "chain_titles": [c.chain_title for c in story.chains],
                 "confidence": story.coverage.chain_confidence,
-                "coverage_pct": story.coverage.evidence_coverage_percentage
+                "coverage_pct": story.coverage.evidence_coverage_percentage,
+                "chains": [c.model_dump(mode="json") for c in story.chains]
             }
         
         incident_id = db.save_scan(incident_dict)

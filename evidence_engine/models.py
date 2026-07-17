@@ -100,6 +100,22 @@ class ActiveScanEvidence(BaseModel):
     rate_limiting_active: bool = Field(True, description="True if server actively blocked/rate-limited burst requests")
 
 
+class DOMAnalysisEvidence(BaseModel):
+    """Results from advanced DOM comparison and static/rendered inspection."""
+    hidden_elements: int = Field(0, description="Number of hidden elements (display:none, hidden attribute, opacity:0, etc.)")
+    hidden_forms: int = Field(0, description="Number of hidden forms")
+    hidden_iframes: int = Field(0, description="Number of hidden iframes")
+    dynamic_dom_modifications: str = Field("No", description="Yes if dynamic elements were created after page load")
+    innerHTML_modifications: str = Field("No", description="Yes if innerHTML/outerHTML manipulation was detected")
+    suspicious_script_count: int = Field(0, description="Number of inline/external scripts using eval, document.write, etc.")
+    suspicious_link_count: int = Field(0, description="Number of hidden or javascript: links")
+    risk_score_contribution: int = Field(0, description="Calculated contribution to overall risk score")
+    confidence_score: int = Field(95, description="Confidence percentage")
+    dom_size_original: int = Field(0, description="Original tag count from static HTML")
+    dom_size_rendered: int = Field(0, description="Rendered tag count from Playwright DOM")
+    dom_size_increase: int = Field(0, description="Tag difference post-rendering")
+
+
 # ── Root Model ────────────────────────────────────────────────────────────────
 
 class ScanEvidence(BaseModel):
@@ -113,6 +129,7 @@ class ScanEvidence(BaseModel):
     snapshot: SnapshotEvidence
     diff: DiffEvidence
     active_scan: Optional[ActiveScanEvidence] = Field(None, description="Results from active penetration testing")
+    dom_analysis: Optional[DOMAnalysisEvidence] = Field(None, description="Results from advanced DOM inspection")
     findings: List[VulnerabilityFinding] = Field(default_factory=list)
     metrics: ScanMetrics
 
