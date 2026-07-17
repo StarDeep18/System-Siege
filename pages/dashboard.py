@@ -431,17 +431,14 @@ def _render_top_mitigations(incident: Optional[dict]) -> None:
     fix = top_finding.get("recommendation", "No specific fix provided.")
     severity = top_finding.get("severity", "High")
     improvement = top_finding.get("risk_contribution", 10)
-    sim_pct = incident.get("similarity_percent", 100.0)
+    pixel_diff_pct = incident.get("pixel_diff_pct", 0.0)
 
     # ── Alert Box & Sound Logic ──
     trigger_alert = False
     alert_msg = ""
-    if severity.upper() in ("CRITICAL", "HIGH"):
+    if pixel_diff_pct > 70.0:
         trigger_alert = True
-        alert_msg = f"SECURITY ALERT: High-level risk detected ({severity.upper()}). Immediate mitigation recommended."
-    elif sim_pct > 70:
-        trigger_alert = True
-        alert_msg = f"SECURITY ALERT: Severe defacement detected! Structural match is only {sim_pct}% (Below 70% threshold)."
+        alert_msg = f"SECURITY ALERT: Severe visual defacement detected! Pixel change is {pixel_diff_pct}% (Over 70% threshold)."
 
     alert_html = ""
     if trigger_alert:

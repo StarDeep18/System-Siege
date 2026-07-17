@@ -217,13 +217,12 @@ def run_scan(url: str, uid: str, asset_id: str) -> None:
     db.log_action(uid, f"MONITOR_SCAN_COMPLETE", f"{url} [{change_class}]", result.resolved_ip)
 
     # ── Critical Alert Flow ──
-    if change_class == "Critical":
+    if pixel_diff_pct > 70.0:
         # Create alert doc in 'alerts' collection
-        alert_title = f"Critical Change Alert: {result.hostname}"
+        alert_title = f"Visual Defacement Alert: {result.hostname}"
         desc = (
-            f"Vulnerability count or page defacement threshold exceeded during scheduled monitoring. "
-            f"Score: {assessment.summary.overall_security_score}/100. "
-            f"Visual Pixel Change: {pixel_diff_pct:.2f}%."
+            f"Severe page defacement detected during scheduled monitoring. "
+            f"Visual Pixel Change: {pixel_diff_pct:.2f}% (exceeds 70% threshold)."
         )
         db_client = db.get_db()
         db_client.collection("alerts").add({
