@@ -439,7 +439,7 @@ def _render_top_mitigations(incident: Optional[dict]) -> None:
     if severity.upper() in ("CRITICAL", "HIGH"):
         trigger_alert = True
         alert_msg = f"SECURITY ALERT: High-level risk detected ({severity.upper()}). Immediate mitigation recommended."
-    elif sim_pct < 70:
+    elif sim_pct > 70:
         trigger_alert = True
         alert_msg = f"SECURITY ALERT: Severe defacement detected! Structural match is only {sim_pct}% (Below 70% threshold)."
 
